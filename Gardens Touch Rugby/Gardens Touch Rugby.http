@@ -1,0 +1,6 @@
+@Gardens_Touch_Rugby_HostAddress = http://localhost:5280
+
+GET {{Gardens_Touch_Rugby_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
