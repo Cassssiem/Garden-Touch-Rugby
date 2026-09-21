@@ -1,3 +1,6 @@
 <Solution>
+  <Project Path="../GTR.Domain/GTR.Domain.csproj" Id="ab003f70-5f75-442f-9f87-6349a298e1de" />
+  <Project Path="../GTR.Infrastructure/GTR.Infrastructure.csproj" Id="469332c1-49b6-448c-a13a-375ea206260e" />
+  <Project Path="../GTR/GTR.Application.csproj" Id="3b240243-8df1-4464-8d43-4507fdbe96d9" />
   <Project Path="Gardens Touch Rugby.csproj" />
 </Solution>
