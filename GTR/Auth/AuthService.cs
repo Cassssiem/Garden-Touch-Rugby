@@ -1,6 +1,7 @@
 ﻿using GTR.Application.Abstractions.Repositories;
 using GTR.Application.Abstractions.Security;
 using GTR.Application.Auth.Dtos;
+using LoginRequest = GTR.Application.Auth.Dtos.LoginRequest;
 
 namespace GTR.Application.Auth
 {
@@ -57,6 +58,7 @@ namespace GTR.Application.Auth
                 throw new UnauthorizedAccessException(
                     "Invalid username or password."
                 );
+
             }
 
             var tokenResult =
@@ -65,10 +67,10 @@ namespace GTR.Application.Auth
             return new LoginResponse
             {
                 AccessToken = tokenResult.Token,
-                ExpiresAtUtc =
-                    tokenResult.ExpiresAtUtc,
+                ExpiresAtUtc = tokenResult.ExpiresAtUtc,
                 Username = account.Username,
-                Role = account.Role.ToString()
+                Role = account.Role.ToString(),
+                PlayerId = account.PlayerId
             };
         }
     }

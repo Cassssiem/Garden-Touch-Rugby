@@ -12,5 +12,7 @@
 
         public string Role { get; init; }
             = string.Empty;
+
+        public Guid? PlayerId { get; init; }
     }
 }

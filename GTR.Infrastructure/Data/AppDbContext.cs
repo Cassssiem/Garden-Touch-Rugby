@@ -197,6 +197,14 @@ namespace GTR.Infrastructure.Data
                 entity.HasIndex(account =>
                         account.NormalizedUsername)
                     .IsUnique();
+
+                entity.HasOne(account => account.Player)
+                    .WithMany()
+                    .HasForeignKey(account => account.PlayerId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(account => account.PlayerId)
+                    .IsUnique();   // one login per player (NULLs are allowed many times)
             });
         }
     }

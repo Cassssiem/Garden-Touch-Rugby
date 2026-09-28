@@ -28,5 +28,31 @@ namespace GTR.Infrastructure.Repositories
                     cancellationToken
                 );
         }
+
+        public async Task<bool> UsernameExistsAsync(
+    string normalizedUsername,
+    CancellationToken cancellationToken = default)
+        {
+            return await _context.Accounts.AnyAsync(
+                account => account.NormalizedUsername == normalizedUsername,
+                cancellationToken);
+        }
+
+        public async Task<bool> PlayerHasAccountAsync(
+            Guid playerId,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.Accounts.AnyAsync(
+                account => account.PlayerId == playerId,
+                cancellationToken);
+        }
+
+        public async Task AddAsync(
+            Account account,
+            CancellationToken cancellationToken = default)
+        {
+            await _context.Accounts.AddAsync(account, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
     }
 }

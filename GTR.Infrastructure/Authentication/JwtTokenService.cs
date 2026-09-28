@@ -30,6 +30,7 @@ namespace GTR.Infrastructure.Authentication
 
             var claims = new List<Claim>
             {
+
                 new(
                     JwtRegisteredClaimNames.Sub,
                     account.Id.ToString()
@@ -51,7 +52,12 @@ namespace GTR.Infrastructure.Authentication
                     account.Role.ToString()
                 )
             };
-
+            if (account.PlayerId.HasValue)
+            {
+                claims.Add(new Claim(
+                    "playerId",
+                    account.PlayerId.Value.ToString()));
+            }
             var keyBytes =
                 Convert.FromBase64String(
                     _options.Key

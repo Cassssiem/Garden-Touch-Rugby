@@ -1,6 +1,7 @@
 ﻿using GTR.Application.Matches.Dtos;
 using GTR.Application.Players;
 using GTR.Application.Players.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Gardens_Touch_Rugby.Controllers
@@ -47,7 +48,7 @@ namespace Gardens_Touch_Rugby.Controllers
 
             return Ok(player);
         }
-      
+        [Authorize] 
         [HttpPost]
         public async Task<ActionResult<PlayerResponse>> Create(
             [FromBody] CreatePlayerRequest request,

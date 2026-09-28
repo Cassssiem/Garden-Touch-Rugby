@@ -5,21 +5,15 @@ namespace GTR.Domain.Entities
     public class Account
     {
         public Guid Id { get; set; } = Guid.NewGuid();
-
-        public string Username { get; set; }
-            = string.Empty;
-
-        public string NormalizedUsername { get; set; }
-            = string.Empty;
-
-        public string PasswordHash { get; set; }
-            = string.Empty;
-
+        public string Username { get; set; } = string.Empty;
+        public string NormalizedUsername { get; set; } = string.Empty;
+        public string PasswordHash { get; set; } = string.Empty;
         public AccountRole Role { get; set; }
-
         public bool IsActive { get; set; } = true;
+        public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
 
-        public DateTimeOffset CreatedAtUtc { get; set; }
-            = DateTimeOffset.UtcNow;
+        // Set only for Player accounts: which player this login belongs to.
+        public Guid? PlayerId { get; set; }
+        public Player? Player { get; set; }
     }
 }

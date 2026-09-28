@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("GTR.Application")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1d079160ec46e5d9fb1e773ded1d08de3e4f5750")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+24eb2c4f005ad104d8c14595a0eeadc899d75521")]
 [assembly: System.Reflection.AssemblyProductAttribute("GTR.Application")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GTR.Application")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
+using Microsoft.OpenApi;
+using GTR.Application.Accounts;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -100,7 +102,7 @@ builder.Services.AddScoped<
     IPlayerService,
     PlayerService
 >();
-
+builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<
     IMatchService,
     MatchService
@@ -152,8 +154,24 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your JWT token."
+    });
 
+    options.AddSecurityRequirement(document =>
+        new OpenApiSecurityRequirement
+        {
+            [new OpenApiSecuritySchemeReference("Bearer", document)] = []
+        });
+});
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -176,13 +194,9 @@ using (var scope = app.Services.CreateScope())
             .GetRequiredService<DatabaseSeeder>();
 
     await seeder.SeedAdminAsync(
-        builder.Configuration[
-            "SeedAdmin:Username"
-        ],
-        builder.Configuration[
-            "SeedAdmin:Password"
-        ]
-    );
+     builder.Configuration["SeedAdmin:Username"],
+     builder.Configuration["SeedAdmin:Password"]
+ );
 }
 
 app.Run();

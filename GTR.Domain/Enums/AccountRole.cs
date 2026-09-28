@@ -3,6 +3,7 @@
     public enum AccountRole
     {
         Selector = 1,
-        Admin = 2
+        Admin = 2,
+        Player = 3
     }
 }

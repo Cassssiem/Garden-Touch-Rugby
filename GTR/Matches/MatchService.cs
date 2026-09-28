@@ -117,13 +117,22 @@ namespace GTR.Application.Matches
             return MatchResponse.FromEntity(match);
         }
 
+        // PLAYER SETS THEIR OWN AVAILABILITY
         public async Task<MatchResponse>
             SetPlayerAvailabilityAsync(
                 Guid matchId,
-                SetPlayerAvailabilityRequest request,
+                Guid playerId,
+                bool isAvailable,
                 CancellationToken cancellationToken = default)
         {
-            if (request.PlayerId == Guid.Empty)
+            if (matchId == Guid.Empty)
+            {
+                throw new ArgumentException(
+                    "Match ID is required."
+                );
+            }
+
+            if (playerId == Guid.Empty)
             {
                 throw new ArgumentException(
                     "Player ID is required."
@@ -145,7 +154,7 @@ namespace GTR.Application.Matches
 
             var player =
                 await _playerRepository.GetByIdAsync(
-                    request.PlayerId,
+                    playerId,
                     cancellationToken
                 );
 
@@ -159,14 +168,13 @@ namespace GTR.Application.Matches
             if (!player.IsActive)
             {
                 throw new InvalidOperationException(
-                    "An inactive player cannot be added " +
-                    "to the pool."
+                    "An inactive player cannot set availability."
                 );
             }
 
             match.SetPlayerAvailability(
                 player.Id,
-                request.IsAvailable
+                isAvailable
             );
 
             await _matchRepository.SaveChangesAsync(
@@ -303,11 +311,13 @@ namespace GTR.Application.Matches
 
             return MatchResponse.FromEntity(match);
         }
-        public async Task<MatchResponse> SetChuckerWinnerAsync(
-    Guid matchId,
-    int chuckerNumber,
-    SetChuckerWinnerRequest request,
-    CancellationToken cancellationToken = default)
+
+        public async Task<MatchResponse>
+            SetChuckerWinnerAsync(
+                Guid matchId,
+                int chuckerNumber,
+                SetChuckerWinnerRequest request,
+                CancellationToken cancellationToken = default)
         {
             if (matchId == Guid.Empty)
             {
@@ -357,10 +367,11 @@ namespace GTR.Application.Matches
             return MatchResponse.FromEntity(match);
         }
 
-        public async Task<MatchResponse> SetMvpAsync(
-    Guid matchId,
-    SetMvpRequest request,
-    CancellationToken cancellationToken = default)
+        public async Task<MatchResponse>
+            SetMvpAsync(
+                Guid matchId,
+                SetMvpRequest request,
+                CancellationToken cancellationToken = default)
         {
             if (matchId == Guid.Empty)
             {
@@ -389,7 +400,9 @@ namespace GTR.Application.Matches
                 );
             }
 
-            match.SetMvp(request.PlayerId);
+            match.SetMvp(
+                request.PlayerId
+            );
 
             await _matchRepository.SaveChangesAsync(
                 cancellationToken
@@ -398,9 +411,10 @@ namespace GTR.Application.Matches
             return MatchResponse.FromEntity(match);
         }
 
-        public async Task<MatchResponse> FinaliseAsync(
-            Guid matchId,
-            CancellationToken cancellationToken = default)
+        public async Task<MatchResponse>
+            FinaliseAsync(
+                Guid matchId,
+                CancellationToken cancellationToken = default)
         {
             var match =
                 await _matchRepository.GetWithDetailsAsync(
