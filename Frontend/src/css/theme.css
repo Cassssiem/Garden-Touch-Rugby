@@ -1,0 +1,12 @@
+@theme {
+  --font-headline: 'Oswald', sans-serif;
+  --font-body: 'Space Grotesk', sans-serif;
+  --color-surface-lowest: #0a0a0e;
+  --color-surface-container-lowest: #0e0e12;
+  --color-surface-container-low: #1b1b1f;
+  --color-surface-container: #1f1f23;
+  --color-surface-container-high: #2a292e;
+  --color-surface-container-highest: #353439;
+  --color-primary-container: #e11d48;
+  --color-primary-accent: #ff4d6d;
+}

@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitignore" />
+  </Folder>
+  <Project Path="../RugbyManagementSystem.Application/RugbyManagementSystem.Application.csproj" />
+  <Project Path="../RugbyManagementSystem.Domain/RugbyManagementSystem.Domain.csproj" />
+  <Project Path="../RugbyManagementSystem.Infastructure/RugbyManagementSystem.Infastructure.csproj" />
+  <Project Path="RugbyManagementSystem Api.csproj" />
+</Solution>

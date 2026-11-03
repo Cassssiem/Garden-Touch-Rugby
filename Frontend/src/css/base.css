@@ -1,0 +1,10 @@
+body {
+  font-family: var(--font-body);
+  background-color: #131317;
+  color: #e4e1e7;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6, .font-headline {
+  font-family: var(--font-headline);
+}

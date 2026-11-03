@@ -1,0 +1,6 @@
+{
+  "name": "Gardens RFC - Touch Rugby Operations & Matchday Roster",
+  "description": "5-a-Side Wednesday Touch Rugby Matchday Management, Team Draft, Availability Pool, Results Capture, and Career Telemetry.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,30 @@
+# IDE and operating-system files
+.vscode/
+.vs/
+.idea/
+.DS_Store
+Thumbs.db
+*.user
+*.suo
+
+# .NET build output and local databases
+**/[Bb]in/
+**/[Oo]bj/
+*.db
+*.sqlite
+*.sqlite3
+*.mdf
+*.ldf
+
+# Frontend dependencies and build output
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+*.log
+
+# Local secrets and environment overrides
+secrets.json
+.env
+.env.local
+.env.*.local
