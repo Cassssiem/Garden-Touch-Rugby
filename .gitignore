@@ -10,6 +10,7 @@ Thumbs.db
 # .NET build output and local databases
 **/[Bb]in/
 **/[Oo]bj/
+**/.workflow-check*/
 *.db
 *.sqlite
 *.sqlite3

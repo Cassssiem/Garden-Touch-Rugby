@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { ChuckerScore, MatchResult, Position, UserAccount } from '../types';
+import { getPendingScoreDisplay, isMatchOverdue } from '../utils/matchStatus';
 
 export const AdminDashboardView: React.FC = () => {
   const {
@@ -56,12 +57,8 @@ export const AdminDashboardView: React.FC = () => {
   const [selectionPoolFilter, setSelectionPoolFilter] = useState<'all' | Position>('all');
   const [copiedRoster, setCopiedRoster] = useState(false);
 
-  const redStarters = players.filter((p) => p.team === 'red' && !p.isSub);
-  const redSubs = players.filter((p) => p.team === 'red' && p.isSub);
-  const redSub = redSubs[0];
-  const blackStarters = players.filter((p) => p.team === 'black' && !p.isSub);
-  const blackSubs = players.filter((p) => p.team === 'black' && p.isSub);
-  const blackSub = blackSubs[0];
+  const redStarters = players.filter((p) => p.team === 'red');
+  const blackStarters = players.filter((p) => p.team === 'black');
 
   const availablePoolPlayers = players.filter((p) => p.team === 'pool' && p.status === 'available');
   const filteredAvailablePool = availablePoolPlayers.filter((p) =>
@@ -90,7 +87,7 @@ export const AdminDashboardView: React.FC = () => {
   const copyWhatsAppRoster = () => {
     const redNames = allRed.map((p) => p.nickname).join(', ') || 'Pending';
     const blackNames = allBlack.map((p) => p.nickname).join(', ') || 'Pending';
-    const snippet = `🏉 ${clubConfig.clubName} OFFICIAL MATCHDAY TEAMS (Round #${clubConfig.matchdayCycle}):\n🔴 TEAM RED: ${redNames}\n⚫ TEAM BLACK: ${blackNames}\nKickoff: ${clubConfig.kickoffTime} @ ${clubConfig.pitchLocation}`;
+    const snippet = `🏉 ${clubConfig.clubName} OFFICIAL MATCHDAY TEAMS (Round #${clubConfig.matchdayCycle}):\n🔴 TEAM RED: ${redNames}\n⚫ TEAM BLACK: ${blackNames}\nKickoff: ${clubConfig.kickoffTime}`;
     navigator.clipboard.writeText(snippet);
     setCopiedRoster(true);
     showToast('WhatsApp roster copied to clipboard!');
@@ -107,11 +104,9 @@ export const AdminDashboardView: React.FC = () => {
 
   const [addRoundNumber, setAddRoundNumber] = useState<number>(nextAutoRound);
   const [addDate, setAddDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [addPitch, setAddPitch] = useState<string>(clubConfig.pitchLocation || 'Main Arena Lawn A • Pitch 2');
   const [addKickoff, setAddKickoff] = useState<string>(clubConfig.kickoffTime || '18:30');
-  const [addReferee, setAddReferee] = useState<string>(clubConfig.referee || 'T. Harris (Grade 2)');
   const [addFormatNotes, setAddFormatNotes] = useState<string>(
-    'Wednesday Touch 5-a-Side • 3 Chuckers (12 min running clock)'
+    'Wednesday Touch 9v9 • 3 Chuckers (12 min running clock)'
   );
 
   const handleCreateMatch = async (e: React.FormEvent) => {
@@ -144,8 +139,6 @@ export const AdminDashboardView: React.FC = () => {
       roundNumber: Number(addRoundNumber),
       date: addDate,
       year: yearVal,
-      pitch: addPitch.trim() || 'Main Arena Lawn A • Pitch 2',
-      referee: addReferee.trim() || 'T. Harris (Grade 2)',
       isPlayed: false, // NOT PLAYED YET!
       seriesScore: 'TBA', // SCORE IS TBA!
       seriesWinner: 'TBA',
@@ -182,8 +175,6 @@ export const AdminDashboardView: React.FC = () => {
   const selectedMatch = matchResults.find((m) => m.roundNumber === editingRound);
 
   const [editDate, setEditDate] = useState('');
-  const [editPitch, setEditPitch] = useState('');
-  const [editReferee, setEditReferee] = useState('');
   const [editChuckers, setEditChuckers] = useState<[ChuckerScore, ChuckerScore, ChuckerScore]>([
     { chuckerNumber: 1, redScore: 0, blackScore: 0, winner: 'DRAW', elapsedTime: '12:00' },
     { chuckerNumber: 2, redScore: 0, blackScore: 0, winner: 'DRAW', elapsedTime: '12:00' },
@@ -196,14 +187,13 @@ export const AdminDashboardView: React.FC = () => {
   const [editMvpPlayerId, setEditMvpPlayerId] = useState('');
   const [editMvpCitation, setEditMvpCitation] = useState('');
   const [editIsPlayed, setEditIsPlayed] = useState<boolean>(true);
+  const [editCorrectionReason, setEditCorrectionReason] = useState('');
 
   // Sync edit form with selected match
   useEffect(() => {
     if (selectedMatch) {
       setEditIsPlayed(selectedMatch.isPlayed !== false && selectedMatch.seriesScore !== 'TBA');
       setEditDate(selectedMatch.date || new Date().toISOString().split('T')[0]);
-      setEditPitch(selectedMatch.pitch || clubConfig.pitchLocation);
-      setEditReferee(selectedMatch.referee || clubConfig.referee);
       setEditChuckers(
         selectedMatch.chuckers && selectedMatch.chuckers.length === 3
           ? (selectedMatch.chuckers as [ChuckerScore, ChuckerScore, ChuckerScore])
@@ -216,6 +206,7 @@ export const AdminDashboardView: React.FC = () => {
       setEditRedScorers(selectedMatch.redScorers || {});
       setEditBlackScorers(selectedMatch.blackScorers || {});
       setEditMvpPlayerId(selectedMatch.mvpPlayerId || '');
+      setEditCorrectionReason('');
       setEditMvpCitation(
         selectedMatch.mvpCitation || 'Decisive touch play, offensive distribution, and leadership'
       );
@@ -286,7 +277,7 @@ export const AdminDashboardView: React.FC = () => {
     team: 'red' | 'black',
     value: number
   ) => {
-    const nextVal = Math.max(0, value);
+    const nextVal = Math.max(0, Math.min(5, value));
     setEditChuckers((prev) => {
       const copy: [ChuckerScore, ChuckerScore, ChuckerScore] = [...prev] as any;
       const current = { ...copy[index] };
@@ -330,14 +321,17 @@ export const AdminDashboardView: React.FC = () => {
     e.preventDefault();
     if (!editingRound || !selectedMatch) return;
 
+    if (selectedMatch.isFinalized && !editCorrectionReason.trim()) {
+      showToast('Enter a correction reason before changing a finalized match.');
+      return;
+    }
+
     if (!editIsPlayed) {
       // Admin keeps or marks the match as TBA (not played yet)
       const updated: MatchResult = {
         ...selectedMatch,
         date: editDate,
         year: !isNaN(new Date(editDate).getFullYear()) ? new Date(editDate).getFullYear() : selectedMatch.year || 2026,
-        pitch: editPitch,
-        referee: editReferee,
         isPlayed: false,
         seriesScore: 'TBA',
         seriesWinner: 'TBA',
@@ -350,14 +344,32 @@ export const AdminDashboardView: React.FC = () => {
         mvpCitation: editMvpCitation || 'Awaiting matchday kickoff',
         redLineup: editRedLineup,
         blackLineup: editBlackLineup,
+        isFinalized: false,
+        correctionReason: editCorrectionReason.trim() || undefined,
       };
       await recordMatchResult(updated);
       showToast(`Round #${editingRound} status set to TBA (Pending Kickoff).`);
       return;
     }
 
-    const redTotal = editChuckers.reduce((sum, c) => sum + (c.redScore || 0), 0);
-    const blackTotal = editChuckers.reduce((sum, c) => sum + (c.blackScore || 0), 0);
+    if (editRedLineup.length !== 9 || editBlackLineup.length !== 9) {
+      showToast('Both teams require exactly 9 saved players.');
+      return;
+    }
+    if (editChuckers.some((chucker) => !((chucker.redScore === 5 && chucker.blackScore < 5) || (chucker.blackScore === 5 && chucker.redScore < 5)))) {
+      showToast('Each chucker needs one team on 5 and the other team between 0 and 4.');
+      return;
+    }
+    if (!editMvpPlayerId || ![...editRedLineup, ...editBlackLineup].includes(editMvpPlayerId)) {
+      showToast('Select an MVP from the saved match lineups.');
+      return;
+    }
+    if (!selectedMatch.isFinalized && !window.confirm('Finalize this match and update all player career statistics?')) {
+      return;
+    }
+
+    const redTotal = Object.values(editRedScorers).reduce((sum, tries) => sum + tries, 0);
+    const blackTotal = Object.values(editBlackScorers).reduce((sum, tries) => sum + tries, 0);
     const redWins = editChuckers.filter((c) => c.winner === 'RED').length;
     const blackWins = editChuckers.filter((c) => c.winner === 'BLACK').length;
     const winner: 'RED' | 'BLACK' | 'DRAW' =
@@ -367,8 +379,6 @@ export const AdminDashboardView: React.FC = () => {
       ...selectedMatch,
       date: editDate,
       year: !isNaN(new Date(editDate).getFullYear()) ? new Date(editDate).getFullYear() : selectedMatch.year || 2026,
-      pitch: editPitch,
-      referee: editReferee,
       isPlayed: true,
       seriesScore: `${redWins} - ${blackWins}`,
       seriesWinner: winner,
@@ -381,6 +391,9 @@ export const AdminDashboardView: React.FC = () => {
       mvpCitation: editMvpCitation,
       redLineup: editRedLineup,
       blackLineup: editBlackLineup,
+      isFinalized: true,
+      finalizedAt: selectedMatch.finalizedAt,
+      correctionReason: editCorrectionReason.trim() || undefined,
     };
 
     await recordMatchResult(updated);
@@ -647,7 +660,7 @@ export const AdminDashboardView: React.FC = () => {
                     MATCHDAY SELECTION
                   </span>
                   <span className="text-xs font-mono text-[#ac8889]">
-                    Round #{clubConfig.matchdayCycle} • 5-a-Side Draft Matrix
+                    Round #{clubConfig.matchdayCycle} • 9v9 Draft Matrix
                   </span>
                 </div>
                 <h2 className="font-headline text-lg uppercase text-white">
@@ -736,20 +749,20 @@ export const AdminDashboardView: React.FC = () => {
                     Team Red
                   </span>
                   <span className="font-mono text-[10px] text-[#ac8889] uppercase">
-                    5 Starters + 1 Sub Slot
+                    9 Players • No Subs
                   </span>
                 </div>
                 <span className="px-2 py-0.5 bg-rose-600/20 text-rose-300 border border-rose-500/30 text-xs font-mono font-bold rounded">
-                  {redStarters.length}/5 Starters
+                  {redStarters.length}/9 Players
                 </span>
               </div>
 
               {/* Starters Slot List */}
               <div className="flex flex-col gap-2">
                 <span className="font-mono text-[10px] uppercase text-[#ac8889] font-bold">
-                  Starting 5 Lineup:
+                  Starting 9 Lineup:
                 </span>
-                {[0, 1, 2, 3, 4].map((slotIdx) => {
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((slotIdx) => {
                   const player = redStarters[slotIdx];
                   if (!player) {
                     return (
@@ -782,14 +795,6 @@ export const AdminDashboardView: React.FC = () => {
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => assignPlayerTeam(player.id, 'red', true)}
-                          className="px-1.5 py-0.5 text-[9px] font-mono text-[#ac8889] hover:text-white bg-[#1b1b1f] rounded"
-                          title="Make Sub"
-                        >
-                          Sub
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => assignPlayerTeam(player.id, 'pool')}
                           className="w-6 h-6 rounded flex items-center justify-center text-[#ac8889] hover:text-rose-400 hover:bg-[#25252b]"
                           title="Return to Pool"
@@ -802,35 +807,7 @@ export const AdminDashboardView: React.FC = () => {
                 })}
               </div>
 
-              {/* Sub Slot */}
-              <div className="pt-2 border-t border-[#2a292e]">
-                <span className="font-mono text-[10px] uppercase text-[#ac8889] font-bold block mb-1.5">
-                  Bench / Rolling Sub:
-                </span>
-                {redSub ? (
-                  <div className="bg-[#141418] border border-dashed border-rose-500/40 p-2.5 rounded-sm flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="px-1.5 py-0.5 bg-rose-600/30 text-rose-300 font-mono text-[10px] font-bold rounded">
-                        SUB
-                      </span>
-                      <span className="font-headline text-sm uppercase text-white truncate">
-                        #{redSub.jerseyNumber} {redSub.nickname}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => assignPlayerTeam(redSub.id, 'pool')}
-                      className="w-6 h-6 rounded flex items-center justify-center text-[#ac8889] hover:text-rose-400"
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="p-2 border border-dashed border-[#2a292e] rounded-sm text-center text-xs font-mono text-[#ac8889]/60">
-                    Sub slot open
-                  </div>
-                )}
-              </div>
+              <div className="border-t border-[#2a292e] pt-2 text-center text-[10px] font-mono uppercase text-[#ac8889]">No substitutes in 9v9</div>
 
               {/* Red Summary */}
               <div className="bg-[#141418] p-2.5 rounded-sm border border-[#2a292e] flex items-center justify-between text-xs font-mono">
@@ -951,20 +928,20 @@ export const AdminDashboardView: React.FC = () => {
                     Team Black
                   </span>
                   <span className="font-mono text-[10px] text-[#ac8889] uppercase">
-                    5 Starters + 1 Sub Slot
+                    9 Players • No Subs
                   </span>
                 </div>
                 <span className="px-2 py-0.5 bg-zinc-800 text-zinc-200 border border-zinc-600 text-xs font-mono font-bold rounded">
-                  {blackStarters.length}/5 Starters
+                  {blackStarters.length}/9 Players
                 </span>
               </div>
 
               {/* Starters Slot List */}
               <div className="flex flex-col gap-2">
                 <span className="font-mono text-[10px] uppercase text-[#ac8889] font-bold">
-                  Starting 5 Lineup:
+                  Starting 9 Lineup:
                 </span>
-                {[0, 1, 2, 3, 4].map((slotIdx) => {
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((slotIdx) => {
                   const player = blackStarters[slotIdx];
                   if (!player) {
                     return (
@@ -997,14 +974,6 @@ export const AdminDashboardView: React.FC = () => {
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => assignPlayerTeam(player.id, 'black', true)}
-                          className="px-1.5 py-0.5 text-[9px] font-mono text-[#ac8889] hover:text-white bg-[#1b1b1f] rounded"
-                          title="Make Sub"
-                        >
-                          Sub
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => assignPlayerTeam(player.id, 'pool')}
                           className="w-6 h-6 rounded flex items-center justify-center text-[#ac8889] hover:text-rose-400 hover:bg-[#25252b]"
                           title="Return to Pool"
@@ -1017,35 +986,7 @@ export const AdminDashboardView: React.FC = () => {
                 })}
               </div>
 
-              {/* Sub Slot */}
-              <div className="pt-2 border-t border-[#2a292e]">
-                <span className="font-mono text-[10px] uppercase text-[#ac8889] font-bold block mb-1.5">
-                  Bench / Rolling Sub:
-                </span>
-                {blackSub ? (
-                  <div className="bg-[#141418] border border-dashed border-zinc-600 p-2.5 rounded-sm flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-300 font-mono text-[10px] font-bold rounded">
-                        SUB
-                      </span>
-                      <span className="font-headline text-sm uppercase text-white truncate">
-                        #{blackSub.jerseyNumber} {blackSub.nickname}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => assignPlayerTeam(blackSub.id, 'pool')}
-                      className="w-6 h-6 rounded flex items-center justify-center text-[#ac8889] hover:text-rose-400"
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="p-2 border border-dashed border-[#2a292e] rounded-sm text-center text-xs font-mono text-[#ac8889]/60">
-                    Sub slot open
-                  </div>
-                )}
-              </div>
+              <div className="border-t border-[#2a292e] pt-2 text-center text-[10px] font-mono uppercase text-[#ac8889]">No substitutes in 9v9</div>
 
               {/* Black Summary */}
               <div className="bg-[#141418] p-2.5 rounded-sm border border-[#2a292e] flex items-center justify-between text-xs font-mono">
@@ -1135,31 +1076,6 @@ export const AdminDashboardView: React.FC = () => {
               />
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="font-mono text-[10px] uppercase text-[#ac8889] tracking-wider font-bold">
-                Pitch / Arena
-              </label>
-              <input
-                type="text"
-                value={addPitch}
-                onChange={(e) => setAddPitch(e.target.value)}
-                placeholder="Main Arena Lawn A"
-                className="bg-[#141418] text-white border border-[#353439] focus:border-rose-500 rounded-sm px-3 py-2 text-sm font-mono outline-none"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="font-mono text-[10px] uppercase text-[#ac8889] tracking-wider font-bold">
-                Official Referee
-              </label>
-              <input
-                type="text"
-                value={addReferee}
-                onChange={(e) => setAddReferee(e.target.value)}
-                placeholder="T. Harris (Grade 2)"
-                className="bg-[#141418] text-white border border-[#353439] focus:border-rose-500 rounded-sm px-3 py-2 text-sm font-mono outline-none"
-              />
-            </div>
           </div>
 
           {/* Match Format & Tactical Notes */}
@@ -1229,6 +1145,7 @@ export const AdminDashboardView: React.FC = () => {
               ) : (
                 filteredMatchesForUpdate.map((m) => {
                   const isCur = editingRound === m.roundNumber;
+                  const isOverdue = isMatchOverdue(m);
                   return (
                     <div
                       key={`update-sel-${m.roundNumber}`}
@@ -1246,7 +1163,7 @@ export const AdminDashboardView: React.FC = () => {
                         <div className="flex items-center gap-1.5">
                           {m.isPlayed === false || m.seriesScore === 'TBA' ? (
                             <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono text-[9px] uppercase font-bold rounded">
-                              TBA • Scheduled
+                              {isOverdue ? 'Score Required' : 'TBA • Scheduled'}
                             </span>
                           ) : (
                             <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-[9px] uppercase font-bold rounded">
@@ -1258,8 +1175,8 @@ export const AdminDashboardView: React.FC = () => {
                       </div>
                       {m.isPlayed === false || m.seriesScore === 'TBA' ? (
                         <div className="flex items-center justify-between text-xs font-headline uppercase font-bold bg-[#1b1b1f] px-2 py-1 rounded-sm border border-amber-500/20">
-                          <span className="text-amber-400">Score: TBA</span>
-                          <span className="text-[10px] font-mono text-[#ac8889]">Awaiting Kickoff</span>
+                          <span className="text-amber-400">Score: {getPendingScoreDisplay(m)}</span>
+                          <span className="text-[10px] font-mono text-[#ac8889]">{isOverdue ? 'Update Score' : 'Awaiting Kickoff'}</span>
                         </div>
                       ) : (
                         <div className="flex items-center justify-between text-xs font-headline uppercase font-bold">
@@ -1314,12 +1231,16 @@ export const AdminDashboardView: React.FC = () => {
                     </span>
                     <div>
                       <span className="font-headline text-xs uppercase text-white font-bold block">
-                        Match Score Status: {editIsPlayed ? 'Match Played (Official Scores)' : 'Score TBA (Not Played Yet)'}
+                        Match Score Status: {editIsPlayed
+                          ? 'Match Played (Official Scores)'
+                          : isMatchOverdue(selectedMatch) ? 'Score 0 - 0 (Update Required)' : 'Score TBA (Not Played Yet)'}
                       </span>
                       <span className="text-[10px] font-mono text-[#ac8889]">
                         {editIsPlayed
                           ? 'Scores entered below will be officially recorded on leaderboards and player stats.'
-                          : 'Match has not been played yet; score will remain as TBA until scores are entered.'}
+                          : isMatchOverdue(selectedMatch)
+                            ? 'The matchday has passed. Enter the official scores to complete this match.'
+                            : 'Match has not been played yet; score will remain as TBA until scores are entered.'}
                       </span>
                     </div>
                   </div>
@@ -1334,7 +1255,7 @@ export const AdminDashboardView: React.FC = () => {
                       }`}
                     >
                       <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                      <span>Score TBA (Pending)</span>
+                      <span>{isMatchOverdue(selectedMatch) ? 'Score 0 - 0 (Pending)' : 'Score TBA (Pending)'}</span>
                     </button>
                     <button
                       type="button"
@@ -1407,7 +1328,7 @@ export const AdminDashboardView: React.FC = () => {
                       Team Red Try Scorers
                     </span>
                     <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
-                      {players.map((p) => {
+                      {players.filter((p) => editRedLineup.includes(p.id)).map((p) => {
                         const count = editRedScorers[p.id] || 0;
                         return (
                           <div key={`red-sc-${p.id}`} className="flex items-center justify-between text-xs py-1 border-b border-[#2a292e]/60">
@@ -1443,7 +1364,7 @@ export const AdminDashboardView: React.FC = () => {
                       Team Black Try Scorers
                     </span>
                     <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
-                      {players.map((p) => {
+                      {players.filter((p) => editBlackLineup.includes(p.id)).map((p) => {
                         const count = editBlackScorers[p.id] || 0;
                         return (
                           <div key={`black-sc-${p.id}`} className="flex items-center justify-between text-xs py-1 border-b border-[#2a292e]/60">
@@ -1486,7 +1407,7 @@ export const AdminDashboardView: React.FC = () => {
                       className="w-full bg-[#141418] border border-[#353439] text-white px-3 py-2 text-xs rounded-sm outline-none focus:border-rose-500 font-headline uppercase"
                     >
                       <option value="">Select MVP Player</option>
-                      {players.map((p) => (
+                      {players.filter((p) => [...editRedLineup, ...editBlackLineup].includes(p.id)).map((p) => (
                         <option key={`mvp-opt-${p.id}`} value={p.id}>
                           #{p.jerseyNumber} "{p.nickname}" ({p.fullName})
                         </option>
@@ -1505,6 +1426,18 @@ export const AdminDashboardView: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                {selectedMatch.isFinalized && (
+                  <label className="flex flex-col gap-1.5 bg-amber-950/20 border border-amber-500/30 rounded-sm p-3 font-mono text-[10px] uppercase text-amber-300">
+                    Correction Reason (required)
+                    <textarea
+                      value={editCorrectionReason}
+                      onChange={(event) => setEditCorrectionReason(event.target.value)}
+                      placeholder="Explain why this finalized result is being corrected..."
+                      className="min-h-20 bg-[#141418] border border-amber-500/30 text-white rounded-sm p-2 text-xs normal-case outline-none focus:border-amber-400"
+                    />
+                  </label>
+                )}
 
                 {/* Save button */}
                 <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#2a292e]">
@@ -1686,7 +1619,7 @@ export const AdminDashboardView: React.FC = () => {
                 <span>Team Selector Delegation &amp; Lineup Roles</span>
               </h2>
               <p className="text-xs text-[#ac8889] mt-0.5 max-w-2xl">
-                Grant or remove the <strong>Selector</strong> role for approved club members. Official Selectors have clearance to pick Wednesday matchday lineups, auto-balance 5-a-side teams, and lock rosters.
+                Grant or remove the <strong>Selector</strong> role for approved club members. Official Selectors have clearance to pick Wednesday 9v9 lineups, auto-balance teams, and lock rosters.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1857,7 +1790,7 @@ export const AdminDashboardView: React.FC = () => {
                       ) : isUserSelector ? (
                         <p className="text-emerald-400/90 text-[11px] font-mono flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-sm text-emerald-400">check_circle</span>
-                          <span>Authorized Lineup Selector: Can balance and finalize Wednesday 5-a-side lineups.</span>
+                          <span>Authorized Lineup Selector: Can balance and finalize Wednesday 9v9 lineups.</span>
                         </p>
                       ) : (
                         <p className="text-[#ac8889] text-[11px] font-mono">

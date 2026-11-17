@@ -32,6 +32,7 @@ export interface Player {
   secondaryPosition?: string;
   roleSpecialty: string;
   status: PlayerStatus;
+  availabilityByDate?: Record<string, PlayerStatus>;
   team: AssignedTeam;
   isSub?: boolean;
   caps: number;
@@ -69,8 +70,6 @@ export interface MatchResult {
   roundNumber: number;
   date: string;
   year?: number;
-  pitch: string;
-  referee?: string;
   isPlayed?: boolean; // false when created and not played yet; true once played & scores saved
   formatNotes?: string;
   chuckers: [ChuckerScore, ChuckerScore, ChuckerScore];
@@ -84,6 +83,9 @@ export interface MatchResult {
   blackScorers: Record<string, number>;
   redLineup?: string[]; // Player IDs selected for Team Red
   blackLineup?: string[]; // Player IDs selected for Team Black
+  isFinalized?: boolean;
+  finalizedAt?: string;
+  correctionReason?: string;
 }
 
 export interface PhotoEntry {
@@ -106,7 +108,5 @@ export interface ClubConfig {
   establishedYear: string;
   matchdayCycle: number;
   nextMatchdayDate: string;
-  pitchLocation: string;
-  referee: string;
   kickoffTime: string;
 }

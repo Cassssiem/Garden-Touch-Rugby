@@ -59,9 +59,9 @@ interface AppContextType {
   addPlayer: (player: Omit<Player, 'id' | 'caps' | 'chuckersPlayed' | 'chuckersWon' | 'tries' | 'mvps'> & Partial<Player>) => Promise<void>;
   updatePlayer: (id: string, updates: Partial<Player>) => Promise<void>;
   deletePlayer: (id: string) => Promise<void>;
-  togglePlayerStatus: (id: string) => void;
-  setPlayerStatus: (id: string, status: PlayerStatus) => void;
-  assignPlayerTeam: (id: string, team: 'red' | 'black' | 'pool', isSub?: boolean) => void;
+  togglePlayerStatus: (id: string, matchDate?: string) => void;
+  setPlayerStatus: (id: string, status: PlayerStatus, matchDate?: string) => void;
+  assignPlayerTeam: (id: string, team: 'red' | 'black' | 'pool') => void;
   
   // Roster Draft Operations
   autoBalanceDraft: () => { parity: number; redScore: number; blackScore: number };
@@ -104,8 +104,6 @@ const DEFAULT_CLUB_CONFIG: ClubConfig = {
   establishedYear: '1879',
   matchdayCycle: 1,
   nextMatchdayDate: 'Wednesday 18:30 Kickoff',
-  pitchLocation: 'Main Arena Lawn A • Pitch 2 Floodlights',
-  referee: 'T. Harris (Grade 2)',
   kickoffTime: '18:30',
 };
 
@@ -240,18 +238,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return response.json() as Promise<T>;
   };
 
+  useEffect(() => {
+    const refreshSession = async () => {
+      if (!localStorage.getItem('touch_auth_token')) return;
+      try {
+        const result = await apiRequest<{ token: string; user: UserAccount }>('/api/auth/refresh', { method: 'POST' });
+        localStorage.setItem('touch_auth_token', result.token);
+        setCurrentUser(result.user);
+        setUsers((prev) => prev.map((user) => user.id === result.user.id ? result.user : user));
+      } catch {
+        localStorage.removeItem('touch_auth_token');
+        setCurrentUser(null);
+      }
+    };
+
+    void refreshSession();
+    window.addEventListener('focus', refreshSession);
+    return () => window.removeEventListener('focus', refreshSession);
+  }, [backendUrl]);
+
   // Club Config State
   const [clubConfig, setClubConfig] = useState<ClubConfig>(() => {
     const saved = localStorage.getItem('touch_club_config');
     return saved ? JSON.parse(saved) : DEFAULT_CLUB_CONFIG;
   });
 
-  // NO HARDCODED PLAYERS: starts empty as requested by user, with duplicate key safety
+  // Keep a full 18-player placeholder roster available until real players are added.
+  const createPlaceholderPlayers = (): Player[] => Array.from({ length: 18 }, (_, index) => {
+    const jerseyNumber = String(index + 1);
+    const position: Player['position'] = ['MIDDLE', 'LINK', 'WING'][index % 3] as Player['position'];
+    const placeholderNumber = String(index + 1).padStart(2, '0');
+    return {
+      id: `placeholder-${placeholderNumber}`,
+      jerseyNumber,
+      nickname: `Placeholder ${placeholderNumber}`,
+      fullName: `Placeholder Player ${placeholderNumber}`,
+      position,
+      roleSpecialty: `${position} Specialist`,
+      status: 'available',
+      availabilityByDate: {},
+      team: 'pool',
+      isSub: false,
+      caps: 0,
+      chuckersPlayed: 0,
+      chuckersWon: 0,
+      tries: 0,
+      mvps: 0,
+      tacticalNotes: 'Temporary placeholder. Replace with real player details.',
+    };
+  });
+
+  // Use placeholders while the roster is empty, with duplicate key safety.
   const [players, setPlayers] = useState<Player[]>(() => {
     const saved = localStorage.getItem('touch_players_data_v2');
-    if (!saved) return [];
+    if (!saved) return createPlaceholderPlayers();
     try {
       const parsed: Player[] = JSON.parse(saved);
+      if (parsed.length === 0) return createPlaceholderPlayers();
       const seen = new Set<string>();
       return parsed.filter((p, idx) => {
         const id = p.id || `p-${idx}`;
@@ -260,7 +303,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return true;
       });
     } catch {
-      return [];
+      return createPlaceholderPlayers();
     }
   });
 
@@ -323,7 +366,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         apiRequest<PhotoEntry[]>('/api/photos', {}, baseUrl),
         apiRequest<ClubConfig>('/api/club-config', {}, baseUrl),
       ]);
-      setPlayers(loadedPlayers);
+      setPlayers(loadedPlayers.length > 0 ? loadedPlayers : createPlaceholderPlayers());
       setMatchResults(loadedMatches);
       setPhotos(loadedPhotos);
       setClubConfig(loadedConfig);
@@ -448,23 +491,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Player removed from roster');
   };
 
-  const togglePlayerStatus = (id: string) => {
+  const togglePlayerStatus = (id: string, matchDate?: string) => {
     const player = players.find((p) => p.id === id);
     if (!player) return;
     const cycle: Record<PlayerStatus, PlayerStatus> = { available: 'pending', pending: 'unavailable', unavailable: 'available' };
-    void updatePlayer(id, { status: cycle[player.status] });
+    const currentStatus = matchDate ? (player.availabilityByDate?.[matchDate] || 'pending') : player.status;
+    const nextStatus = cycle[currentStatus];
+    if (matchDate && nextStatus === 'available' && players.filter((p) => p.availabilityByDate?.[matchDate] === 'available').length >= 18) {
+      showToast('This Wednesday availability pool already has the maximum 18 players.');
+      return;
+    }
+    void updatePlayer(id, {
+      status: nextStatus,
+      availabilityByDate: matchDate
+        ? { ...(player.availabilityByDate || {}), [matchDate]: nextStatus }
+        : player.availabilityByDate,
+    });
   };
 
-  const setPlayerStatus = (id: string, status: PlayerStatus) => {
-    void updatePlayer(id, { status });
+  const setPlayerStatus = (id: string, status: PlayerStatus, matchDate?: string) => {
+    const player = players.find((p) => p.id === id);
+    if (!player) return;
+    if (matchDate && status === 'available' && player.availabilityByDate?.[matchDate] !== 'available' &&
+        players.filter((p) => p.availabilityByDate?.[matchDate] === 'available').length >= 18) {
+      showToast('This Wednesday availability pool already has the maximum 18 players.');
+      return;
+    }
+    void updatePlayer(id, {
+      status,
+      availabilityByDate: matchDate
+        ? { ...(player.availabilityByDate || {}), [matchDate]: status }
+        : player.availabilityByDate,
+    });
   };
 
-  const assignPlayerTeam = (id: string, team: 'red' | 'black' | 'pool', isSub?: boolean) => {
+  const assignPlayerTeam = (id: string, team: 'red' | 'black' | 'pool') => {
     const target = players.find((p) => p.id === id);
     if (!target) return;
-    const teamStarters = players.filter((p) => p.id !== id && p.team === team && !p.isSub);
-    const determinedIsSub = team === 'pool' ? false : (isSub !== undefined ? isSub : teamStarters.length >= 5);
-    void updatePlayer(id, { team, isSub: determinedIsSub });
+    const currentTeamPlayers = players.filter((p) => p.id !== id && p.team === team);
+    if (team !== 'pool' && currentTeamPlayers.length >= 9) {
+      showToast(`Team ${team === 'red' ? 'Red' : 'Black'} already has 9 players.`);
+      return;
+    }
+    void updatePlayer(id, { team, isSub: false });
     const playerName = target.nickname || target.fullName;
     const teamLabel = team === 'pool' ? 'Reserve Pool' : team === 'red' ? 'Team Red ONLY' : 'Team Black ONLY';
     showToast(`${playerName} assigned to ${teamLabel}`);
@@ -485,13 +554,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const blackAssigned: string[] = [];
 
     sorted.forEach((player) => {
-      if (redAssigned.length >= 6 && blackAssigned.length >= 6) {
+      if (redAssigned.length >= 9 && blackAssigned.length >= 9) {
         return;
       }
-      if (redAssigned.length >= 6) {
+      if (redAssigned.length >= 9) {
         blackAssigned.push(player.id);
         blackTries += player.tries;
-      } else if (blackAssigned.length >= 6) {
+      } else if (blackAssigned.length >= 9) {
         redAssigned.push(player.id);
         redTries += player.tries;
       } else if (redTries <= blackTries) {
@@ -507,10 +576,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const redIdx = redAssigned.indexOf(p.id);
         const blackIdx = blackAssigned.indexOf(p.id);
         if (redIdx !== -1) {
-          return { ...p, team: 'red', isSub: redIdx === 5 };
+          return { ...p, team: 'red', isSub: false };
         }
         if (blackIdx !== -1) {
-          return { ...p, team: 'black', isSub: blackIdx === 5 };
+          return { ...p, team: 'black', isSub: false };
         }
         return { ...p, team: 'pool', isSub: false };
       });

@@ -55,6 +55,8 @@ public sealed class FrontendAppService : IFrontendAppService
             : player.Nickname.Trim();
         player.Position = player.Position.ToUpperInvariant();
         player.Status = player.Status.ToLowerInvariant();
+        player.AvailabilityByDate = player.AvailabilityByDate
+            .ToDictionary(x => x.Key, x => x.Value.ToLowerInvariant());
         player.Team = player.Team.ToLowerInvariant();
         return player;
     }
@@ -94,6 +96,7 @@ public sealed class FrontendAppService : IFrontendAppService
             player = NormalizePlayer(player);
             if (players.Any(x => x.Id == player.Id)) throw new InvalidOperationException("A player with this ID already exists.");
             players.Insert(0, player);
+            EnsureAvailabilityCapacity(players);
             await WriteAsync(PlayersKey, players);
             return player;
         }
@@ -110,10 +113,21 @@ public sealed class FrontendAppService : IFrontendAppService
             if (index < 0) return null;
             updates.Id = id;
             players[index] = NormalizePlayer(updates);
+            EnsureAvailabilityCapacity(players);
             await WriteAsync(PlayersKey, players);
             return players[index];
         }
         finally { Gate.Release(); }
+    }
+
+    private static void EnsureAvailabilityCapacity(IEnumerable<FrontendPlayerDto> players)
+    {
+        var overCapacityDate = players
+            .SelectMany(x => x.AvailabilityByDate.Where(a => a.Value == "available").Select(a => a.Key))
+            .GroupBy(x => x)
+            .FirstOrDefault(group => group.Count() > 18)?.Key;
+        if (overCapacityDate is not null)
+            throw new InvalidOperationException($"The availability pool for {overCapacityDate} is limited to 18 players.");
     }
 
     public async Task<bool> DeletePlayerAsync(string id)
@@ -159,9 +173,9 @@ public sealed class FrontendAppService : IFrontendAppService
             player.Mvps = played.Count(x => x.MvpPlayerId == player.Id);
             player.Caps = played.Count(x => (x.RedLineup?.Contains(player.Id) ?? false) || (x.BlackLineup?.Contains(player.Id) ?? false));
             player.ChuckersPlayed = player.Caps * 3;
-            player.ChuckersWon = played.Count(x =>
-                (x.SeriesWinner == "RED" && (x.RedLineup?.Contains(player.Id) ?? false)) ||
-                (x.SeriesWinner == "BLACK" && (x.BlackLineup?.Contains(player.Id) ?? false)));
+            player.ChuckersWon = played.Sum(match => match.Chuckers.Count(chucker =>
+                (chucker.RedScore > chucker.BlackScore && (match.RedLineup?.Contains(player.Id) ?? false)) ||
+                (chucker.BlackScore > chucker.RedScore && (match.BlackLineup?.Contains(player.Id) ?? false))));
         }
         await WriteAsync(PlayersKey, players);
     }

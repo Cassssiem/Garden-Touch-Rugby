@@ -328,33 +328,6 @@ export const PlayerProfileView: React.FC = () => {
                   'Registered touch rugby athlete. Known for sharp spatial awareness, line speed, and link distribution.'}
               </p>
 
-              {/* Biometrics Matrix */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 w-full">
-                <div className="bg-[#131317] p-2.5 rounded-sm border border-[#2a292e]">
-                  <span className="block font-mono text-[10px] uppercase text-[#ac8889]">Height</span>
-                  <span className="font-headline text-base text-white">
-                    {myPlayer?.heightCm || heightCm} <span className="text-xs text-rose-500">CM</span>
-                  </span>
-                </div>
-                <div className="bg-[#131317] p-2.5 rounded-sm border border-[#2a292e]">
-                  <span className="block font-mono text-[10px] uppercase text-[#ac8889]">Weight</span>
-                  <span className="font-headline text-base text-white">
-                    {myPlayer?.weightKg || weightKg} <span className="text-xs text-rose-500">KG</span>
-                  </span>
-                </div>
-                <div className="bg-[#131317] p-2.5 rounded-sm border border-[#2a292e]">
-                  <span className="block font-mono text-[10px] uppercase text-[#ac8889]">Speed Index</span>
-                  <span className="font-headline text-base text-white">
-                    {myPlayer?.speedIndex || speedIndex} <span className="text-xs text-rose-500">/10</span>
-                  </span>
-                </div>
-                <div className="bg-[#131317] p-2.5 rounded-sm border border-[#2a292e]">
-                  <span className="block font-mono text-[10px] uppercase text-[#ac8889]">Member Since</span>
-                  <span className="font-headline text-base text-white">
-                    {myPlayer?.memberSince || '2026'}
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
 

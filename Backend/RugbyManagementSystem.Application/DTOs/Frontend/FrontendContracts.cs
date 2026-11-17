@@ -22,6 +22,7 @@ public sealed class FrontendPlayerDto
     public string? SecondaryPosition { get; set; }
     public string RoleSpecialty { get; set; } = string.Empty;
     public string Status { get; set; } = "available";
+    public Dictionary<string, string> AvailabilityByDate { get; set; } = [];
     public string Team { get; set; } = "pool";
     public bool? IsSub { get; set; }
     public int Caps { get; set; }
@@ -52,8 +53,6 @@ public sealed class FrontendMatchDto
     public int RoundNumber { get; set; }
     public string Date { get; set; } = string.Empty;
     public int? Year { get; set; }
-    public string Pitch { get; set; } = string.Empty;
-    public string? Referee { get; set; }
     public bool? IsPlayed { get; set; }
     public string? FormatNotes { get; set; }
     public List<FrontendChuckerScoreDto> Chuckers { get; set; } = [];
@@ -67,6 +66,9 @@ public sealed class FrontendMatchDto
     public Dictionary<string, int> BlackScorers { get; set; } = [];
     public List<string>? RedLineup { get; set; }
     public List<string>? BlackLineup { get; set; }
+    public bool? IsFinalized { get; set; }
+    public DateTimeOffset? FinalizedAt { get; set; }
+    public string? CorrectionReason { get; set; }
 }
 
 public sealed class FrontendPhotoDto
@@ -91,8 +93,6 @@ public sealed class FrontendClubConfigDto
     public string EstablishedYear { get; set; } = "1879";
     public int MatchdayCycle { get; set; } = 1;
     public string NextMatchdayDate { get; set; } = "Wednesday 18:30 Kickoff";
-    public string PitchLocation { get; set; } = string.Empty;
-    public string Referee { get; set; } = string.Empty;
     public string KickoffTime { get; set; } = "18:30";
 }
 

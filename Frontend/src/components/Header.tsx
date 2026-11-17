@@ -508,8 +508,6 @@ export const Header: React.FC = () => {
                 updateClubConfig({
                   clubName: (form.elements.namedItem('clubName') as HTMLInputElement).value,
                   tagline: (form.elements.namedItem('tagline') as HTMLInputElement).value,
-                  pitchLocation: (form.elements.namedItem('pitchLocation') as HTMLInputElement).value,
-                  referee: (form.elements.namedItem('referee') as HTMLInputElement).value,
                 });
                 setIsConfigModalOpen(false);
               }}
@@ -533,28 +531,6 @@ export const Header: React.FC = () => {
                 <input
                   name="tagline"
                   defaultValue={clubConfig.tagline}
-                  className="w-full bg-[#131317] border border-[#353439] text-white px-3 py-2 text-sm rounded-sm focus:border-rose-500 outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-mono uppercase tracking-widest text-[#ac8889] block mb-1">
-                  Pitch Location
-                </label>
-                <input
-                  name="pitchLocation"
-                  defaultValue={clubConfig.pitchLocation}
-                  className="w-full bg-[#131317] border border-[#353439] text-white px-3 py-2 text-sm rounded-sm focus:border-rose-500 outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-mono uppercase tracking-widest text-[#ac8889] block mb-1">
-                  Match Official / Referee
-                </label>
-                <input
-                  name="referee"
-                  defaultValue={clubConfig.referee}
                   className="w-full bg-[#131317] border border-[#353439] text-white px-3 py-2 text-sm rounded-sm focus:border-rose-500 outline-none"
                   required
                 />

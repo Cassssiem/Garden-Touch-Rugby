@@ -7,6 +7,7 @@ export const TeamSelectionView: React.FC = () => {
     clubConfig,
     updateClubConfig,
     players,
+    setPlayers,
     matchResults,
     recordMatchResult,
     assignPlayerTeam,
@@ -29,10 +30,9 @@ export const TeamSelectionView: React.FC = () => {
   const [roundNumber, setRoundNumber] = useState(nextRound);
   const [matchDate, setMatchDate] = useState(new Date().toISOString().split('T')[0]);
   const [kickoffTime, setKickoffTime] = useState(clubConfig.kickoffTime || '18:30');
-  const [pitch, setPitch] = useState(clubConfig.pitchLocation || 'Main Arena Lawn A • Pitch 2');
-  const [referee, setReferee] = useState(clubConfig.referee || 'T. Harris (Grade 2)');
-  const [formatNotes, setFormatNotes] = useState('Wednesday Touch 5-a-Side • 3 Chuckers (12 min running clock)');
+  const [formatNotes, setFormatNotes] = useState('Wednesday Touch 9v9 • 3 Chuckers (12 min running clock)');
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [editingMatchRound, setEditingMatchRound] = useState<number | null>(null);
   const canDraftTeams = hasSelectorClearance;
   const isWednesdayMatchDate = (() => {
     const parts = matchDate.split('-').map(Number);
@@ -46,13 +46,13 @@ export const TeamSelectionView: React.FC = () => {
   })();
 
   // Teams breakdown
-  const redStarters = players.filter((p) => p.team === 'red' && !p.isSub);
-  const redSub = players.find((p) => p.team === 'red' && p.isSub);
+  const redStarters = players.filter((p) => p.team === 'red');
 
-  const blackStarters = players.filter((p) => p.team === 'black' && !p.isSub);
-  const blackSub = players.find((p) => p.team === 'black' && p.isSub);
+  const blackStarters = players.filter((p) => p.team === 'black');
 
-  const poolPlayers = players.filter((p) => p.team === 'pool' && p.status === 'available');
+  const poolPlayers = players.filter((p) =>
+    p.team === 'pool' && (p.availabilityByDate?.[matchDate] || p.status) === 'available'
+  );
 
   const filteredPool = poolPlayers;
 
@@ -88,12 +88,12 @@ export const TeamSelectionView: React.FC = () => {
       showToast('Match date must be a Wednesday. Please select a Wednesday date.');
       return;
     }
-    if (matchResults.some((existingMatch) => existingMatch.roundNumber === roundNumber)) {
+    if (matchResults.some((existingMatch) => existingMatch.roundNumber === roundNumber) && editingMatchRound !== roundNumber) {
       showToast(`Round #${roundNumber} already exists. Choose another round number.`);
       return;
     }
-    if (redStarters.length < 5 || blackStarters.length < 5) {
-      showToast('Select 5 starting players for both Red and Black before creating the match.');
+    if (allRed.length !== 9 || allBlack.length !== 9) {
+      showToast('Select exactly 9 players for both Team Red and Team Black before creating the match.');
       return;
     }
 
@@ -106,8 +106,6 @@ export const TeamSelectionView: React.FC = () => {
       roundNumber,
       date: matchDate,
       year: new Date(matchDate).getFullYear(),
-      pitch: pitch.trim(),
-      referee: referee.trim(),
       formatNotes: formatNotes.trim(),
       isPlayed: false,
       chuckers: emptyChuckers,
@@ -125,11 +123,11 @@ export const TeamSelectionView: React.FC = () => {
     setIsFinalizing(true);
     try {
       await recordMatchResult(match);
-      updateClubConfig({ matchdayCycle: roundNumber, nextMatchdayDate: matchDate, kickoffTime, pitchLocation: pitch, referee });
+      updateClubConfig({ matchdayCycle: roundNumber, nextMatchdayDate: matchDate, kickoffTime });
       lockRoster();
-      resetDraft();
+      setEditingMatchRound(null);
       setRoundNumber(roundNumber + 1);
-      showToast(`Round #${roundNumber} created. Teams cleared — select new teams for the next match.`);
+      showToast(`Round #${roundNumber} ${editingMatchRound ? 'updated' : 'created'}. Teams remain displayed here; reset the draft when you’re ready for the next round.`);
     } finally {
       setIsFinalizing(false);
     }
@@ -138,13 +136,52 @@ export const TeamSelectionView: React.FC = () => {
   // WhatsApp Broadcast Text
   const redList = allRed.map((p) => p.nickname).join(', ') || 'Pending draft';
   const blackList = allBlack.map((p) => p.nickname).join(', ') || 'Pending draft';
-  const whatsappSnippet = `📋 ${clubConfig.clubName} WEDNESDAY TOUCH TEAMS (Round #${clubConfig.matchdayCycle}):\n🔴 TEAM RED: ${redList}\n⚫ TEAM BLACK: ${blackList}\nKickoff ${clubConfig.kickoffTime} @ ${clubConfig.pitchLocation}`;
+  const whatsappSnippet = `📋 ${clubConfig.clubName} WEDNESDAY TOUCH TEAMS (Round #${clubConfig.matchdayCycle}):\n🔴 TEAM RED: ${redList}\n⚫ TEAM BLACK: ${blackList}\nKickoff ${clubConfig.kickoffTime}`;
 
   const copyWhatsAppText = () => {
     navigator.clipboard.writeText(whatsappSnippet);
     setCopiedSnippet(true);
     showToast('WhatsApp matchday roster copied to clipboard!');
     setTimeout(() => setCopiedSnippet(false), 2200);
+  };
+
+  const loadScheduledMatch = (value: string) => {
+    if (!value) {
+      setEditingMatchRound(null);
+      setPlayers((current) => current.map((player) => ({ ...player, team: 'pool', isSub: false })));
+      return;
+    }
+    const match = matchResults.find((item) => item.roundNumber === Number(value));
+    if (!match || match.isPlayed === true) return;
+    const redIds = match.redLineup || [];
+    const blackIds = match.blackLineup || [];
+    setEditingMatchRound(match.roundNumber);
+    setRoundNumber(match.roundNumber);
+    setMatchDate(match.date);
+    setPlayers((current) => current.map((player) => {
+      const redIndex = redIds.indexOf(player.id);
+      const blackIndex = blackIds.indexOf(player.id);
+      if (redIndex >= 0) return { ...player, team: 'red', isSub: false };
+      if (blackIndex >= 0) return { ...player, team: 'black', isSub: false };
+      return { ...player, team: 'pool', isSub: false };
+    }));
+  };
+
+  const exportTeamSheet = () => {
+    const lines = [
+      `${clubConfig.clubName} — Round #${roundNumber}`,
+      `Wednesday ${matchDate} at ${kickoffTime}`,
+      '',
+      `TEAM RED: ${allRed.map((player) => `${player.nickname} (#${player.jerseyNumber})`).join(', ')}`,
+      `TEAM BLACK: ${allBlack.map((player) => `${player.nickname} (#${player.jerseyNumber})`).join(', ')}`,
+    ];
+    const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Gardens_RFC_Round_${roundNumber}_Team_Sheet.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('Team sheet exported.');
   };
 
   if (!hasSelectorClearance) {
@@ -161,6 +198,15 @@ export const TeamSelectionView: React.FC = () => {
 
   const matchSetupForm = (
         <div className="flex flex-col gap-5 pb-5 mb-5 border-b border-white/10 [&_label]:tracking-[0.12em] [&_input]:!rounded-md [&_input]:!border-white/10 [&_input]:!bg-[#131318] [&_input]:!px-3.5 [&_input]:!py-2.5 [&_input]:transition-all [&_input]:hover:!border-white/20 [&_input]:focus:!border-rose-500/70 [&_input]:focus:!ring-2 [&_input]:focus:!ring-rose-500/10">
+          <label className="flex flex-col gap-1.5 font-mono text-[10px] uppercase text-[#ac8889] font-bold max-w-sm">
+            Edit Scheduled Match
+            <select value={editingMatchRound || ''} onChange={(event) => loadScheduledMatch(event.target.value)} className="bg-[#131318] text-white border border-white/10 px-3.5 py-2.5 rounded-md outline-none">
+              <option value="">Create a new match</option>
+              {matchResults.filter((match) => match.isPlayed !== true).map((match) => (
+                <option key={match.roundNumber} value={match.roundNumber}>Round #{match.roundNumber} — {match.date}</option>
+              ))}
+            </select>
+          </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <label className="flex flex-col gap-1.5 font-mono text-[10px] uppercase text-[#ac8889] font-bold">Round Number<input type="number" min="1" required value={roundNumber} onChange={(e) => setRoundNumber(Number(e.target.value))} className="bg-[#141418] text-white border border-[#353439] focus:border-rose-500 rounded-sm px-3 py-2 text-sm font-mono outline-none" /></label>
             <label className="flex flex-col gap-1.5 font-mono text-[10px] uppercase text-[#ac8889] font-bold">
@@ -171,7 +217,7 @@ export const TeamSelectionView: React.FC = () => {
                 value={matchDate}
                 onChange={(e) => setMatchDate(e.target.value)}
                 aria-invalid={Boolean(matchDate) && !isWednesdayMatchDate}
-                className={`bg-[#141418] text-white border focus:border-rose-500 rounded-sm px-3 py-2 text-sm font-mono outline-none ${matchDate && !isWednesdayMatchDate ? 'border-rose-500' : 'border-[#353439]'}`}
+                className={`bg-[#141418] text-white [color-scheme:light] [&::-webkit-calendar-picker-indicator]:invert border focus:border-rose-500 rounded-sm px-3 py-2 text-sm font-mono outline-none ${matchDate && !isWednesdayMatchDate ? 'border-rose-500' : 'border-[#353439]'}`}
               />
               {matchDate && !isWednesdayMatchDate && (
                 <span className="normal-case text-[10px] text-rose-400">Matches can only be created on Wednesdays.</span>
@@ -199,7 +245,7 @@ export const TeamSelectionView: React.FC = () => {
                 Team Selection
               </h1>
               <p className="mt-2 text-xs sm:text-sm text-[#ac8889]">
-                Complete the fixture details, build both 5-a-side teams, and finalize the match below.
+                Complete the fixture details, build both 9-player teams with no substitutes, and finalize the match below.
               </p>
             </div>
             <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-rose-300">
@@ -222,7 +268,7 @@ export const TeamSelectionView: React.FC = () => {
                 2. Wednesday Team Selection &amp; Draft
               </h1>
               <p className="text-xs sm:text-sm text-[#ac8889]">
-                Drafting 5-a-Side Teams: Team Red vs. Team Black • 3 Games / Chuckers (12 min running clock)
+                Drafting 9v9 Teams: Team Red vs. Team Black • 3 Games / Chuckers (12 min running clock)
               </p>
             </div>
 
@@ -442,7 +488,7 @@ export const TeamSelectionView: React.FC = () => {
                     THE REDS
                   </span>
                   <span className="font-mono text-[10px] uppercase tracking-widest text-[#ac8889] mt-0.5">
-                    {redStarters.length} Starters • {redSub ? '1 Sub Ready' : 'Sub Empty'}
+                    {redStarters.length}/9 Players
                   </span>
                 </div>
               </div>
@@ -451,14 +497,14 @@ export const TeamSelectionView: React.FC = () => {
               </span>
             </div>
 
-            {/* Pitch Positions: 5 Starters */}
+            {/* Team Red: Nine Players */}
             <div className="bg-[#0e0e12] p-2.5 rounded-sm border border-[#2a292e] flex flex-col gap-1.5">
               <div className="flex items-center justify-between mb-1 text-[11px] font-mono text-[#ac8889] uppercase">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm text-rose-500">stadium</span>
-                  Formation: 5 Starters
+                  Starting 9
                 </span>
-                <span className="text-rose-400 font-bold">5-a-Side Pitch</span>
+                <span className="text-rose-400 font-bold">9v9 Team</span>
               </div>
 
               {redStarters.length === 0 ? (
@@ -467,7 +513,7 @@ export const TeamSelectionView: React.FC = () => {
                 </div>
               ) : (
                 redStarters.map((player, idx) => {
-                  const posLabels = ['M1', 'M2', 'L1', 'L2', 'W1'];
+                  const posLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
                   const posLabel = posLabels[idx] || `S${idx + 1}`;
                   return (
                     <div
@@ -508,59 +554,12 @@ export const TeamSelectionView: React.FC = () => {
               )}
             </div>
 
-            {/* Rolling Subs Bench */}
-            <div className="bg-[#0e0e12] p-2.5 rounded-sm border border-[#2a292e] flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-[11px] font-mono text-[#ac8889] uppercase">
-                <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-rose-500">swap_horizontal_circle</span>
-                  Rolling Sub Box ({redSub ? '1/1 Filled' : '0/1 Slot'})
-                </span>
-                <span className="text-rose-400 font-bold">Interchange</span>
-              </div>
-
-              {redSub ? (
-                <div className="bg-[#1f1f23] rounded-sm p-2 flex items-center justify-between border border-rose-500/20">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-sm bg-rose-600 text-white font-headline text-xs flex items-center justify-center font-bold">
-                      SUB
-                    </span>
-                    <div className="flex flex-col">
-                      <span className="font-headline text-sm uppercase text-white leading-tight">
-                        {redSub.nickname}
-                      </span>
-                      <span className="font-mono text-[10px] text-[#ac8889] uppercase">
-                        Impact Utility • {redSub.position}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-right font-mono text-[10px]">
-                      <span className="text-rose-400 font-bold block">{redSub.tries} TRIES</span>
-                    </div>
-                    {canDraftTeams && (
-                      <button
-                        onClick={() => assignPlayerTeam(redSub.id, 'pool')}
-                        className="w-7 h-7 rounded hover:bg-[#353439] flex items-center justify-center text-[#ac8889] hover:text-rose-400"
-                        title="Unassign"
-                      >
-                        <span className="material-symbols-outlined text-sm">remove_circle_outline</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 text-center text-xs text-[#ac8889] border border-dashed border-[#2a292e] rounded-sm">
-                  Sub slot open. Add 6th player to Team Red.
-                </div>
-              )}
-            </div>
-
             {/* Team Red Aggregate Pill */}
             <div className="bg-[#2a292e] p-2.5 rounded-sm flex items-center justify-between text-white border border-rose-500/20">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
                 <span className="font-mono text-xs uppercase text-white">
-                  {redStarters.length} Starters + {redSub ? '1 Sub' : '0'}
+                  {redStarters.length}/9 Players
                 </span>
               </div>
               <div className="flex items-center gap-3 font-headline text-sm">
@@ -584,7 +583,7 @@ export const TeamSelectionView: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-[#ac8889]">
-                Assign confirmed players directly to Red or Black. 5 Starters + 1 Sub per side.
+                Assign nine players to each team. All selected players are starters; there are no substitutes.
               </p>
             </div>
 
@@ -605,9 +604,13 @@ export const TeamSelectionView: React.FC = () => {
                     className="bg-[#1f1f23] hover:bg-[#2a292e] transition-colors p-2.5 rounded-sm flex items-center justify-between border border-[#2a292e]"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded bg-[#0e0e12] border border-[#2a292e] flex items-center justify-center font-mono text-xs text-rose-500 font-bold shrink-0">
-                        #{player.jerseyNumber}
-                      </div>
+                      {player.avatarUrl ? (
+                        <img src={player.avatarUrl} alt={player.nickname} className="w-8 h-8 rounded object-cover border border-[#2a292e] shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded bg-[#0e0e12] border border-[#2a292e] flex items-center justify-center font-mono text-xs text-rose-500 font-bold shrink-0">
+                          #{player.jerseyNumber}
+                        </div>
+                      )}
                       <div className="flex flex-col min-w-0">
                         <span className="font-headline text-sm uppercase text-white truncate">
                           {player.nickname}
@@ -617,7 +620,7 @@ export const TeamSelectionView: React.FC = () => {
                           <span>•</span>
                           <span>{player.tries} Tries</span>
                           <span>•</span>
-                          <span>{player.caps} Caps</span>
+                          <span>{player.chuckersWon} Chuckers Won</span>
                         </div>
                       </div>
                     </div>
@@ -626,7 +629,7 @@ export const TeamSelectionView: React.FC = () => {
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           onClick={() =>
-                            assignPlayerTeam(player.id, 'red', allRed.length >= 5)
+                            assignPlayerTeam(player.id, 'red')
                           }
                           className="h-7 px-2.5 bg-rose-600 hover:bg-rose-500 text-white font-mono text-[10px] uppercase font-bold rounded-sm transition-colors flex items-center gap-1"
                           title="Draft to Team Red"
@@ -635,7 +638,7 @@ export const TeamSelectionView: React.FC = () => {
                         </button>
                         <button
                           onClick={() =>
-                            assignPlayerTeam(player.id, 'black', allBlack.length >= 5)
+                            assignPlayerTeam(player.id, 'black')
                           }
                           className="h-7 px-2.5 bg-zinc-700 hover:bg-zinc-600 text-white font-mono text-[10px] uppercase font-bold rounded-sm transition-colors flex items-center gap-1"
                           title="Draft to Team Black"
@@ -662,14 +665,14 @@ export const TeamSelectionView: React.FC = () => {
               <div className="flex items-center justify-between text-xs font-mono">
                 <span className="text-[#ac8889]">Roster Completeness:</span>
                 <span className="text-rose-500 font-bold">
-                  {Math.min(100, Math.round(((allRed.length + allBlack.length) / 12) * 100))}%
+                  {Math.min(100, Math.round(((allRed.length + allBlack.length) / 18) * 100))}%
                 </span>
               </div>
               <div className="w-full h-1.5 bg-[#0e0e12] rounded-full overflow-hidden mt-1">
                 <div
                   className="h-full bg-rose-600 transition-all duration-300"
                   style={{
-                    width: `${Math.min(100, Math.round(((allRed.length + allBlack.length) / 12) * 100))}%`,
+                    width: `${Math.min(100, Math.round(((allRed.length + allBlack.length) / 18) * 100))}%`,
                   }}
                 ></div>
               </div>
@@ -689,7 +692,7 @@ export const TeamSelectionView: React.FC = () => {
                     THE BLACKS
                   </span>
                   <span className="font-mono text-[10px] uppercase tracking-widest text-[#ac8889] mt-0.5">
-                    {blackStarters.length} Starters • {blackSub ? '1 Sub Ready' : 'Sub Empty'}
+                    {blackStarters.length}/9 Players
                   </span>
                 </div>
               </div>
@@ -698,14 +701,14 @@ export const TeamSelectionView: React.FC = () => {
               </span>
             </div>
 
-            {/* Pitch Positions: 5 Starters */}
+            {/* Team Black: Nine Players */}
             <div className="bg-[#0e0e12] p-2.5 rounded-sm border border-[#2a292e] flex flex-col gap-1.5">
               <div className="flex items-center justify-between mb-1 text-[11px] font-mono text-[#ac8889] uppercase">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm text-white">stadium</span>
-                  Formation: 5 Starters
+                  Starting 9
                 </span>
-                <span className="text-white font-bold">5-a-Side Pitch</span>
+                <span className="text-white font-bold">9v9 Team</span>
               </div>
 
               {blackStarters.length === 0 ? (
@@ -714,7 +717,7 @@ export const TeamSelectionView: React.FC = () => {
                 </div>
               ) : (
                 blackStarters.map((player, idx) => {
-                  const posLabels = ['M1', 'M2', 'L1', 'L2', 'W1'];
+                  const posLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
                   const posLabel = posLabels[idx] || `S${idx + 1}`;
                   return (
                     <div
@@ -755,59 +758,12 @@ export const TeamSelectionView: React.FC = () => {
               )}
             </div>
 
-            {/* Rolling Subs Bench */}
-            <div className="bg-[#0e0e12] p-2.5 rounded-sm border border-[#2a292e] flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-[11px] font-mono text-[#ac8889] uppercase">
-                <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-white">swap_horizontal_circle</span>
-                  Rolling Sub Box ({blackSub ? '1/1 Filled' : '0/1 Slot'})
-                </span>
-                <span className="text-white font-bold">Interchange</span>
-              </div>
-
-              {blackSub ? (
-                <div className="bg-[#1f1f23] rounded-sm p-2 flex items-center justify-between border border-zinc-700">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-sm bg-zinc-700 text-white font-headline text-xs flex items-center justify-center font-bold">
-                      SUB
-                    </span>
-                    <div className="flex flex-col">
-                      <span className="font-headline text-sm uppercase text-white leading-tight">
-                        {blackSub.nickname}
-                      </span>
-                      <span className="font-mono text-[10px] text-[#ac8889] uppercase">
-                        Impact Utility • {blackSub.position}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-right font-mono text-[10px]">
-                      <span className="text-white font-bold block">{blackSub.tries} TRIES</span>
-                    </div>
-                    {canDraftTeams && (
-                      <button
-                        onClick={() => assignPlayerTeam(blackSub.id, 'pool')}
-                        className="w-7 h-7 rounded hover:bg-[#353439] flex items-center justify-center text-[#ac8889] hover:text-white"
-                        title="Unassign"
-                      >
-                        <span className="material-symbols-outlined text-sm">remove_circle_outline</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 text-center text-xs text-[#ac8889] border border-dashed border-[#2a292e] rounded-sm">
-                  Sub slot open. Add 6th player to Team Black.
-                </div>
-              )}
-            </div>
-
             {/* Team Black Aggregate Pill */}
             <div className="bg-[#2a292e] p-2.5 rounded-sm flex items-center justify-between text-white border border-zinc-700">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-zinc-300"></span>
                 <span className="font-mono text-xs uppercase text-white">
-                  {blackStarters.length} Starters + {blackSub ? '1 Sub' : '0'}
+                  {blackStarters.length}/9 Players
                 </span>
               </div>
               <div className="flex items-center gap-3 font-headline text-sm">
@@ -830,7 +786,7 @@ export const TeamSelectionView: React.FC = () => {
                 Matchday Broadcast Snippet
               </span>
               <p className="font-mono text-xs text-[#ac8889] truncate">
-                📋 WEDNESDAY TOUCH TEAMS: Team Red ({redStarters.length + (redSub ? 1 : 0)}): {redList} | Team Black ({blackStarters.length + (blackSub ? 1 : 0)}): {blackList}
+                📋 WEDNESDAY TOUCH TEAMS: Team Red ({allRed.length}): {redList} | Team Black ({allBlack.length}): {blackList}
               </p>
             </div>
           </div>
@@ -846,13 +802,21 @@ export const TeamSelectionView: React.FC = () => {
               <span>{copiedSnippet ? 'Copied!' : 'Copy WhatsApp Text'}</span>
             </button>
             <button
+              onClick={exportTeamSheet}
+              className="h-10 px-4 bg-[#1f1f23] hover:bg-[#2a292e] text-white font-headline text-xs uppercase tracking-wider rounded-sm flex items-center gap-1.5 transition-colors border border-[#353439] shadow-sm"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-base">download</span>
+              Export Team Sheet
+            </button>
+            <button
               onClick={finalizeSelection}
               disabled={isFinalizing}
               className="h-11 px-6 bg-rose-600 hover:bg-rose-500 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 text-white font-headline text-xs uppercase tracking-wider rounded-md flex items-center gap-1.5 transition-all shadow-[0_8px_24px_rgba(225,29,72,0.3)] font-bold"
               type="button"
             >
               <span className="material-symbols-outlined text-base">verified</span>
-              {isFinalizing ? 'Creating Match...' : 'Create Match & Finalize Teams'}
+              {isFinalizing ? 'Saving Match...' : editingMatchRound ? 'Update Match & Finalize Teams' : 'Create Match & Finalize Teams'}
             </button>
           </div>
         </div>

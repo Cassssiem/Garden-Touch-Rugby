@@ -516,33 +516,6 @@ export const PlayerHubView: React.FC = () => {
                       'Registered competitive touch rugby player. Known for quick touchline acceleration, offensive link play, and defensive agility.'}
                   </p>
 
-                  {/* Biometrics Matrix */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 w-full">
-                    <div className="bg-[#131317] p-2.5 rounded-sm border border-[#2a292e]">
-                      <span className="block font-mono text-[10px] uppercase text-[#ac8889]">Height</span>
-                      <span className="font-headline text-base text-white">
-                        {activeProfilePlayer.heightCm || 180} <span className="text-xs text-rose-500">CM</span>
-                      </span>
-                    </div>
-                    <div className="bg-[#131317] p-2.5 rounded-sm border border-[#2a292e]">
-                      <span className="block font-mono text-[10px] uppercase text-[#ac8889]">Weight</span>
-                      <span className="font-headline text-base text-white">
-                        {activeProfilePlayer.weightKg || 80} <span className="text-xs text-rose-500">KG</span>
-                      </span>
-                    </div>
-                    <div className="bg-[#131317] p-2.5 rounded-sm border border-[#2a292e]">
-                      <span className="block font-mono text-[10px] uppercase text-[#ac8889]">Speed Index</span>
-                      <span className="font-headline text-base text-white">
-                        {activeProfilePlayer.speedIndex || 8.5} <span className="text-xs text-rose-500">/10</span>
-                      </span>
-                    </div>
-                    <div className="bg-[#131317] p-2.5 rounded-sm border border-[#2a292e]">
-                      <span className="block font-mono text-[10px] uppercase text-[#ac8889]">Member Since</span>
-                      <span className="font-headline text-base text-white">
-                        {activeProfilePlayer.memberSince || '2024'}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               </div>
 

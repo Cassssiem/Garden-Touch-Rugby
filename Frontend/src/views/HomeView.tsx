@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { GardensLogo } from '../components/GardensLogo';
+import { isMatchOverdue } from '../utils/matchStatus';
 
 export const HomeView: React.FC = () => {
   const {
@@ -15,11 +16,8 @@ export const HomeView: React.FC = () => {
   } = useApp();
 
   // Compute live team rosters from current players
-  const redStarters = players.filter((p) => p.team === 'red' && !p.isSub);
-  const redSub = players.find((p) => p.team === 'red' && p.isSub);
-
-  const blackStarters = players.filter((p) => p.team === 'black' && !p.isSub);
-  const blackSub = players.find((p) => p.team === 'black' && p.isSub);
+  const redStarters = players.filter((p) => p.team === 'red');
+  const blackStarters = players.filter((p) => p.team === 'black');
 
   const availableCount = players.filter((p) => p.status === 'available').length;
   const pendingCount = players.filter((p) => p.status === 'pending').length;
@@ -30,9 +28,13 @@ export const HomeView: React.FC = () => {
   const latestPlayedMatch = sortedPlayedMatches[0];
 
   // Upcoming scheduled match
-  const upcomingScheduledMatch = matchResults.find((m) => m.isPlayed === false || m.seriesScore === 'TBA');
+  const upcomingScheduledMatch = matchResults.find(
+    (m) => (m.isPlayed === false || m.seriesScore === 'TBA') && !isMatchOverdue(m)
+  );
   const hasUpcomingMatch = Boolean(upcomingScheduledMatch);
   const pendingMatchesCount = matchResults.filter((m) => m.isPlayed === false || m.seriesScore === 'TBA').length;
+  const overdueMatchesCount = matchResults.filter((match) => isMatchOverdue(match)).length;
+  const upcomingPendingMatchesCount = pendingMatchesCount - overdueMatchesCount;
 
   const upcomingRound = upcomingScheduledMatch
     ? upcomingScheduledMatch.roundNumber
@@ -42,11 +44,6 @@ export const HomeView: React.FC = () => {
     ? upcomingScheduledMatch.date
     : clubConfig.nextMatchdayDate;
 
-  const upcomingPitch = upcomingScheduledMatch
-    ? upcomingScheduledMatch.pitch
-    : clubConfig.pitchLocation;
-
-  const upcomingReferee = upcomingScheduledMatch?.referee || clubConfig.referee;
 
   // "Time Till Next Match" Countdown: only computed and displayed if there is a match coming up
   const [timeLeft, setTimeLeft] = useState<string>('');
@@ -119,24 +116,12 @@ export const HomeView: React.FC = () => {
           ?.map((id) => players.find((p) => p.id === id))
           .filter((p): p is (typeof players)[0] => !!p) || []);
 
-  const upcomingRedSub =
-    redSub ||
-    (upcomingScheduledMatch?.redLineup && upcomingRedStarters.length > 5
-      ? upcomingRedStarters[5]
-      : undefined);
-
   const upcomingBlackStarters =
     blackStarters.length > 0
       ? blackStarters
       : (upcomingScheduledMatch?.blackLineup
           ?.map((id) => players.find((p) => p.id === id))
           .filter((p): p is (typeof players)[0] => !!p) || []);
-
-  const upcomingBlackSub =
-    blackSub ||
-    (upcomingScheduledMatch?.blackLineup && upcomingBlackStarters.length > 5
-      ? upcomingBlackStarters[5]
-      : undefined);
 
   // Try leadership stats
   const sortedByTries = [...players].sort((a, b) => b.tries - a.tries);
@@ -166,7 +151,7 @@ export const HomeView: React.FC = () => {
                 ROUND {upcomingRound} • NEXT FIXTURE ON DECK
               </span>
               <span className="font-mono text-xs text-[#ac8889] uppercase tracking-widest">
-                {upcomingPitch} • {clubConfig.kickoffTime} KICKOFF
+                {clubConfig.kickoffTime} KICKOFF
               </span>
             </div>
           </div>
@@ -300,16 +285,15 @@ export const HomeView: React.FC = () => {
                     TEAM RED
                   </span>
                   <span className="font-headline text-2xl uppercase text-white tracking-wide">
-                    RED PACK
+                    TEAM RED
                   </span>
-                  <span className="text-xs text-[#ac8889]">Home Whites / Red Trim</span>
                 </div>
 
                 {/* VS */}
                 <div className="flex flex-col items-center justify-center shrink-0 px-4">
                   <span className="font-headline text-3xl text-rose-500 italic font-bold">VS</span>
                   <span className="font-mono text-[10px] uppercase tracking-widest text-[#ac8889]">
-                    5-A-SIDE
+                    9v9
                   </span>
                 </div>
 
@@ -319,14 +303,13 @@ export const HomeView: React.FC = () => {
                     TEAM BLACK
                   </span>
                   <span className="font-headline text-2xl uppercase text-white tracking-wide">
-                    BLACK SHADOW
+                    TEAM BLACK
                   </span>
-                  <span className="text-xs text-[#ac8889]">Away Obsidian Strip</span>
                 </div>
               </div>
 
-              {/* Rules & Venue Strip */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-[#1f1f23] p-3 rounded-sm border border-[#2a292e]">
+              {/* Match details strip */}
+              <div className="grid grid-cols-2 gap-2 bg-[#1f1f23] p-3 rounded-sm border border-[#2a292e]">
                 <div className="flex flex-col">
                   <span className="font-mono text-[10px] uppercase text-[#ac8889]">MATCH FORMAT</span>
                   <span className="font-headline text-xs text-white">3 × 12m Chuckers</span>
@@ -334,16 +317,6 @@ export const HomeView: React.FC = () => {
                 <div className="flex flex-col">
                   <span className="font-mono text-[10px] uppercase text-[#ac8889]">KICKOFF TIME</span>
                   <span className="font-headline text-xs text-rose-400 font-bold">{clubConfig.kickoffTime} Local</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-mono text-[10px] uppercase text-[#ac8889]">VENUE / PITCH</span>
-                  <span className="font-headline text-xs text-white truncate" title={upcomingPitch}>
-                    {upcomingPitch}
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-mono text-[10px] uppercase text-[#ac8889]">OFFICIAL REF</span>
-                  <span className="font-headline text-xs text-white">{upcomingReferee}</span>
                 </div>
               </div>
 
@@ -364,7 +337,7 @@ export const HomeView: React.FC = () => {
                         TEAM RED ROSTER
                       </span>
                       <span className="font-mono text-[10px] text-[#ac8889]">
-                        {upcomingRedStarters.length} + {upcomingRedSub ? '1 SUB' : '0 SUB'}
+                        {upcomingRedStarters.slice(0, 9).length}/9 PLAYERS
                       </span>
                     </div>
 
@@ -374,7 +347,7 @@ export const HomeView: React.FC = () => {
                           No players assigned yet. Click 'Team Selection &amp; Draft'.
                         </div>
                       ) : (
-                        upcomingRedStarters.slice(0, 5).map((p, idx) => (
+                        upcomingRedStarters.slice(0, 9).map((p, idx) => (
                           <div
                             key={p.id}
                             className="flex justify-between items-center bg-[#131317] px-2 py-1 rounded-sm text-xs"
@@ -389,12 +362,6 @@ export const HomeView: React.FC = () => {
                         ))
                       )}
 
-                      {upcomingRedSub && (
-                        <div className="flex justify-between items-center bg-[#2a292e] px-2 py-1 rounded-sm text-xs text-rose-300">
-                          <span className="italic font-headline uppercase">Sub: {upcomingRedSub.nickname}</span>
-                          <span className="font-mono text-[10px] uppercase">IMPACT SUB</span>
-                        </div>
-                      )}
                     </div>
                   </div>
 
@@ -405,7 +372,7 @@ export const HomeView: React.FC = () => {
                         TEAM BLACK ROSTER
                       </span>
                       <span className="font-mono text-[10px] text-[#ac8889]">
-                        {upcomingBlackStarters.length} + {upcomingBlackSub ? '1 SUB' : '0 SUB'}
+                        {upcomingBlackStarters.slice(0, 9).length}/9 PLAYERS
                       </span>
                     </div>
 
@@ -415,7 +382,7 @@ export const HomeView: React.FC = () => {
                           No players assigned yet. Click 'Team Selection &amp; Draft'.
                         </div>
                       ) : (
-                        upcomingBlackStarters.slice(0, 5).map((p, idx) => (
+                        upcomingBlackStarters.slice(0, 9).map((p, idx) => (
                           <div
                             key={p.id}
                             className="flex justify-between items-center bg-[#131317] px-2 py-1 rounded-sm text-xs"
@@ -430,12 +397,6 @@ export const HomeView: React.FC = () => {
                         ))
                       )}
 
-                      {upcomingBlackSub && (
-                        <div className="flex justify-between items-center bg-[#2a292e] px-2 py-1 rounded-sm text-xs text-zinc-300">
-                          <span className="italic font-headline uppercase">Sub: {upcomingBlackSub.nickname}</span>
-                          <span className="font-mono text-[10px] uppercase">IMPACT SUB</span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -445,35 +406,20 @@ export const HomeView: React.FC = () => {
             {/* CTAs */}
             <div className="p-6 pt-0 flex flex-wrap gap-2 items-center">
               <button
-                onClick={() => setActivePage('team-selection')}
-                className="flex-1 py-2 px-3 bg-rose-600 hover:bg-rose-500 text-white font-headline text-xs uppercase tracking-wider rounded-sm transition-all text-center shadow-md shadow-rose-950/40 font-bold flex items-center justify-center gap-1.5"
+                onClick={() => {
+                  const scorecardMatch = latestPlayedMatch || upcomingScheduledMatch;
+                  if (scorecardMatch) {
+                    viewMatchScorecard(scorecardMatch.roundNumber);
+                  } else {
+                    setActivePage('match-history');
+                  }
+                }}
+                className="w-full py-2.5 px-3 bg-rose-600 hover:bg-rose-500 text-white font-headline text-xs uppercase tracking-wider rounded-sm transition-all text-center shadow-md shadow-rose-950/40 font-bold flex items-center justify-center gap-1.5"
+                title={latestPlayedMatch ? `View full scorecard for Round #${latestPlayedMatch.roundNumber}` : 'View full scorecard'}
               >
-                <span className="material-symbols-outlined text-sm">groups</span>
-                <span>Team Selection &amp; Draft</span>
+                <span className="material-symbols-outlined text-sm">sports_score</span>
+                <span>Full Scorecard</span>
               </button>
-              <button
-                onClick={() => setActivePage('availability-pool')}
-                className="py-2 px-3 bg-[#2a292e] hover:bg-[#353439] text-[#e4e1e7] font-headline text-xs uppercase tracking-wider rounded-sm transition-all text-center border border-[#353439] flex items-center justify-center gap-1 font-bold"
-              >
-                <span className="material-symbols-outlined text-sm text-rose-400">event_available</span>
-                <span>Pool ({availableCount})</span>
-              </button>
-              {currentUser?.role === 'ADMIN' && (
-                <button
-                  onClick={() => {
-                    if (upcomingScheduledMatch) {
-                      editMatchInScorekeeper(upcomingScheduledMatch.roundNumber);
-                    } else {
-                      openAdminDashboard('add-match');
-                    }
-                  }}
-                  className="py-2 px-3 bg-[#1e1e24] hover:bg-[#282832] text-rose-400 hover:text-white font-headline text-xs uppercase tracking-wider rounded-sm transition-all text-center border border-rose-500/30 flex items-center justify-center gap-1 font-bold"
-                  title="Open Admin Scorekeeper for upcoming fixture"
-                >
-                  <span className="material-symbols-outlined text-sm">sports_score</span>
-                  <span>{upcomingScheduledMatch ? 'Enter Scores' : '+ Add Match'}</span>
-                </button>
-              )}
             </div>
           </div>
 
@@ -769,12 +715,6 @@ export const HomeView: React.FC = () => {
             {/* Card B Footer */}
             <div className="p-6 pt-0 flex flex-wrap sm:flex-nowrap gap-2">
               <button
-                onClick={() => setActivePage('match-history')}
-                className="flex-1 py-2 px-3 bg-rose-600 hover:bg-rose-500 text-white font-headline text-xs uppercase tracking-wider rounded-sm transition-all text-center shadow-md font-bold"
-              >
-                Match History by Year
-              </button>
-              <button
                 onClick={() => {
                   if (latestPlayedMatch) {
                     viewMatchScorecard(latestPlayedMatch.roundNumber);
@@ -823,7 +763,9 @@ export const HomeView: React.FC = () => {
               <span className="font-mono text-[10px] uppercase text-[#ac8889]">MATCHDAYS PLAYED</span>
               <div className="my-1 flex items-baseline gap-1">
                 <span className="font-headline text-3xl text-white">{playedMatches.length}</span>
-                <span className="font-mono text-xs text-[#ac8889]">PLAYED {pendingMatchesCount > 0 ? `(${pendingMatchesCount} TBA)` : ''}</span>
+                <span className="font-mono text-xs text-[#ac8889]">
+                  PLAYED {upcomingPendingMatchesCount > 0 ? `(${upcomingPendingMatchesCount} TBA)` : ''} {overdueMatchesCount > 0 ? `(${overdueMatchesCount} NEED SCORE)` : ''}
+                </span>
               </div>
               <span className="text-xs text-rose-500 font-mono">
                 {playedMatches.length * 3} Chuckers Contested

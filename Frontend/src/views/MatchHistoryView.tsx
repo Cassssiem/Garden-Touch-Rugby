@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { MatchResult, ChuckerScore } from '../types';
 import { toPng } from 'html-to-image';
+import { getPendingScoreDisplay, isMatchOverdue } from '../utils/matchStatus';
 
 export const MatchHistoryView: React.FC = () => {
   const {
@@ -23,22 +24,6 @@ export const MatchHistoryView: React.FC = () => {
 
   const isAdmin = currentUser?.role === 'ADMIN';
 
-  // Helper to extract year from a match
-  const getMatchYear = (match: MatchResult): number => {
-    if (match.year) return match.year;
-    if (match.date) {
-      const parsed = new Date(match.date).getFullYear();
-      if (!isNaN(parsed)) return parsed;
-    }
-    return 2026;
-  };
-
-  // Dynamically determine all available years (defaults to including 2025, 2026, 2027)
-  const defaultYears = [2025, 2026, 2027];
-  const recordedYears = matchResults.map(getMatchYear);
-  const allYears = Array.from(new Set([...defaultYears, ...recordedYears])).sort((a, b) => a - b);
-
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [filterOutcome, setFilterOutcome] = useState<'ALL' | 'RED' | 'BLACK' | 'DRAW'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
@@ -58,7 +43,6 @@ export const MatchHistoryView: React.FC = () => {
     if (scorecardModalRound != null) {
       const match = matchResults.find((m) => m.roundNumber === scorecardModalRound);
       if (match) {
-        setSelectedYear(getMatchYear(match));
         setActiveScorecardMatch(match);
         setTimeout(() => {
           const el = document.getElementById(`match-card-${match.roundNumber}`);
@@ -76,8 +60,7 @@ export const MatchHistoryView: React.FC = () => {
   const [newRoundNumber, setNewRoundNumber] = useState<number>(() => {
     return matchResults.length + 1;
   });
-  const [newDate, setNewDate] = useState<string>(`${selectedYear}-10-15`);
-  const [newPitch, setNewPitch] = useState<string>(clubConfig.pitchLocation);
+  const [newDate, setNewDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [newRedTries, setNewRedTries] = useState<number>(5);
   const [newBlackTries, setNewBlackTries] = useState<number>(4);
   const [newSeriesWinner, setNewSeriesWinner] = useState<'RED' | 'BLACK' | 'DRAW'>('RED');
@@ -158,7 +141,7 @@ export const MatchHistoryView: React.FC = () => {
 
       ctx.fillStyle = '#ac8889';
       ctx.font = '15px monospace';
-      ctx.fillText(`${clubConfig.clubName} • ${match.pitch} • Referee: ${match.referee || clubConfig.referee}`, 40, 110);
+      ctx.fillText(`${clubConfig.clubName}`, 40, 110);
       ctx.fillText(`Date: ${match.date || 'Wednesday Touch'}`, 880, 110);
 
       // Series Outcome Banner
@@ -442,38 +425,33 @@ export const MatchHistoryView: React.FC = () => {
     }
   };
 
-  // Matches filtered by selected year
-  const yearMatches = useMemo(() => {
-    return matchResults.filter((m) => getMatchYear(m) === selectedYear);
-  }, [matchResults, selectedYear]);
+  // All-time match history totals
+  const allMatches = matchResults;
+  const totalGames = allMatches.length;
+  const redWins = allMatches.filter((m) => m.seriesWinner === 'RED').length;
+  const blackWins = allMatches.filter((m) => m.seriesWinner === 'BLACK').length;
+  const draws = allMatches.filter((m) => m.seriesWinner === 'DRAW').length;
+  const totalTries = allMatches.reduce((acc, m) => acc + (m.redTotalTries || 0) + (m.blackTotalTries || 0), 0);
+  const avgTriesPerGame = totalGames > 0 ? (totalTries / totalGames).toFixed(1) : '0.0';
 
-  // Year telemetry stats
-  const totalGamesInYear = yearMatches.length;
-  const redWins = yearMatches.filter((m) => m.seriesWinner === 'RED').length;
-  const blackWins = yearMatches.filter((m) => m.seriesWinner === 'BLACK').length;
-  const draws = yearMatches.filter((m) => m.seriesWinner === 'DRAW').length;
-  const totalTriesInYear = yearMatches.reduce((acc, m) => acc + (m.redTotalTries || 0) + (m.blackTotalTries || 0), 0);
-  const avgTriesPerGame = totalGamesInYear > 0 ? (totalTriesInYear / totalGamesInYear).toFixed(1) : '0.0';
-
-  // Find top scorer or MVP in this year
-  const yearMvpCount: Record<string, number> = {};
-  yearMatches.forEach((m) => {
+  // Find all-time MVP leader
+  const mvpCount: Record<string, number> = {};
+  allMatches.forEach((m) => {
     if (m.mvpPlayerId) {
-      yearMvpCount[m.mvpPlayerId] = (yearMvpCount[m.mvpPlayerId] || 0) + 1;
+      mvpCount[m.mvpPlayerId] = (mvpCount[m.mvpPlayerId] || 0) + 1;
     }
   });
-  const topMvpId = Object.keys(yearMvpCount).sort((a, b) => yearMvpCount[b] - yearMvpCount[a])[0];
+  const topMvpId = Object.keys(mvpCount).sort((a, b) => mvpCount[b] - mvpCount[a])[0];
   const topMvpPlayer = players.find((p) => p.id === topMvpId);
 
   // Filtered by outcome and search query
-  const filteredMatches = yearMatches.filter((match) => {
+  const filteredMatches = allMatches.filter((match) => {
     const matchesOutcome = filterOutcome === 'ALL' || match.seriesWinner === filterOutcome;
     const searchLower = searchTerm.toLowerCase();
     const mvpPlayer = players.find((p) => p.id === match.mvpPlayerId);
     const matchesSearch =
       !searchTerm ||
       match.roundNumber.toString().includes(searchLower) ||
-      match.pitch.toLowerCase().includes(searchLower) ||
       (match.date && match.date.toLowerCase().includes(searchLower)) ||
       (mvpPlayer && mvpPlayer.nickname.toLowerCase().includes(searchLower));
     return matchesOutcome && matchesSearch;
@@ -509,8 +487,7 @@ export const MatchHistoryView: React.FC = () => {
     const matchToRecord: MatchResult = {
       roundNumber: Number(newRoundNumber),
       date: newDate,
-      year: selectedYear,
-      pitch: newPitch,
+      year: new Date(newDate).getFullYear(),
       chuckers: dummyChuckers,
       redTotalTries: Number(newRedTries),
       blackTotalTries: Number(newBlackTries),
@@ -536,7 +513,7 @@ export const MatchHistoryView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-rose-500/20 border border-rose-500/40 text-rose-400 font-mono text-[11px] uppercase tracking-widest rounded-sm">
                   <span className="material-symbols-outlined text-xs text-rose-500">history_edu</span>
-                  SEASON ARCHIVES
+                  ALL MATCHES
                 </span>
                 <span className="text-[#ac8889] font-mono text-[11px] tracking-widest uppercase">
                   {clubConfig.clubName} OFFICIAL LEDGER
@@ -546,7 +523,7 @@ export const MatchHistoryView: React.FC = () => {
                 MATCH <span className="text-rose-500">HISTORY</span>
               </h1>
               <p className="text-sm text-[#ac8889]">
-                5-a-Side Wednesday matchday records, 3-chucker scores, parity indicators, and historical honours by year.
+                5-a-Side Wednesday matchday records, scores, scorers, and all-time honours.
               </p>
             </div>
 
@@ -571,7 +548,7 @@ export const MatchHistoryView: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
-                    setNewDate(`${selectedYear}-06-15`);
+                    setNewDate(new Date().toISOString().slice(0, 10));
                     setIsRecordModalOpen(true);
                   }}
                   className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#2a292e] hover:bg-[#353439] text-[#e4e1e7] font-headline text-xs uppercase tracking-wider rounded-sm border border-[#353439] transition-all font-bold"
@@ -583,83 +560,24 @@ export const MatchHistoryView: React.FC = () => {
             )}
           </div>
 
-          {/* ================= SMALL TABS FOR THE YEARS ================= */}
-          <div className="pt-2 border-t border-[#2a292e]/60 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[11px] uppercase tracking-wider text-[#ac8889] flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-sm text-rose-500">calendar_month</span>
-                Select Season Year:
-              </span>
-              <span className="text-xs font-mono text-[#ac8889]">
-                Showing: <strong className="text-white">{selectedYear}</strong> ({totalGamesInYear} {totalGamesInYear === 1 ? 'game' : 'games'})
-              </span>
-            </div>
-
-            {/* The Year Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-thin">
-              {allYears.map((yr) => {
-                const count = matchResults.filter((m) => getMatchYear(m) === yr).length;
-                const isSelected = selectedYear === yr;
-
-                return (
-                  <button
-                    key={yr}
-                    onClick={() => setSelectedYear(yr)}
-                    className={`shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-sm font-headline text-xs uppercase tracking-wider transition-all duration-150 border ${
-                      isSelected
-                        ? 'bg-rose-600 text-white border-rose-500 shadow-[0_0_12px_rgba(225,29,72,0.4)] font-bold scale-[1.02]'
-                        : 'bg-[#1b1b1f] hover:bg-[#25252a] text-[#ac8889] hover:text-white border-[#2a292e]'
-                    }`}
-                  >
-                    <span>{yr}</span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono leading-none ${
-                        isSelected
-                          ? 'bg-white/20 text-white font-bold'
-                          : 'bg-[#131317] text-[#ac8889]'
-                      }`}
-                    >
-                      {count} {count === 1 ? 'game' : 'games'}
-                    </span>
-                  </button>
-                );
-              })}
-
-              {/* Add Custom Year Tab button */}
-              <button
-                onClick={() => {
-                  const promptYr = prompt('Enter season year to add (e.g. 2028):');
-                  if (promptYr && !isNaN(Number(promptYr))) {
-                    const parsedYr = Number(promptYr);
-                    setSelectedYear(parsedYr);
-                  }
-                }}
-                className="shrink-0 px-2.5 py-2 bg-[#17171b] hover:bg-[#222228] text-[#ac8889] hover:text-white border border-dashed border-[#353439] rounded-sm text-xs font-mono flex items-center gap-1 transition-colors"
-                title="Add a custom year tab"
-              >
-                <span className="material-symbols-outlined text-xs">add</span>
-                <span>+ Year</span>
-              </button>
-            </div>
-          </div>
         </div>
       </section>
 
-      {/* Selected Year Season Telemetry Strip */}
+      {/* All-Time Match Telemetry Strip */}
       <section className="w-full bg-[#131317] border-b border-[#2a292e] px-4 sm:px-6 py-6">
         <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Games in Year */}
           <div className="bg-[#1b1b1f] p-4 rounded-sm border border-[#2a292e] flex flex-col justify-between shadow-sm">
             <div className="flex items-center justify-between text-[#ac8889] text-xs font-mono">
-              <span className="uppercase tracking-wider">SEASON FIXTURES</span>
+              <span className="uppercase tracking-wider">FIXTURES</span>
               <span className="material-symbols-outlined text-rose-500 text-sm">stadium</span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="font-headline text-3xl text-white font-bold">{totalGamesInYear}</span>
-              <span className="text-xs text-[#ac8889] font-mono">Games in {selectedYear}</span>
+              <span className="font-headline text-3xl text-white font-bold">{totalGames}</span>
+              <span className="text-xs text-[#ac8889] font-mono">Matches recorded</span>
             </div>
             <span className="text-[11px] font-mono text-emerald-400 mt-1">
-              {totalGamesInYear > 0 ? `${totalGamesInYear * 3} Chuckers Completed` : 'No fixtures logged yet'}
+              {totalGames > 0 ? `${totalGames * 3} Chuckers Completed` : 'No fixtures logged yet'}
             </span>
           </div>
 
@@ -685,13 +603,13 @@ export const MatchHistoryView: React.FC = () => {
               <div
                 className="bg-rose-600 h-full"
                 style={{
-                  width: totalGamesInYear > 0 ? `${(redWins / totalGamesInYear) * 100}%` : '50%',
+                  width: totalGames > 0 ? `${(redWins / totalGames) * 100}%` : '50%',
                 }}
               ></div>
               <div
                 className="bg-zinc-600 h-full"
                 style={{
-                  width: totalGamesInYear > 0 ? `${(blackWins / totalGamesInYear) * 100}%` : '50%',
+                  width: totalGames > 0 ? `${(blackWins / totalGames) * 100}%` : '50%',
                 }}
               ></div>
             </div>
@@ -704,7 +622,7 @@ export const MatchHistoryView: React.FC = () => {
               <span className="material-symbols-outlined text-rose-500 text-sm">sports_rugby</span>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <span className="font-headline text-3xl text-rose-500 font-bold">{totalTriesInYear}</span>
+              <span className="font-headline text-3xl text-rose-500 font-bold">{totalTries}</span>
               <span className="text-xs text-[#ac8889] font-mono">Total Tries</span>
             </div>
             <span className="text-[11px] font-mono text-[#ac8889] mt-1">
@@ -715,7 +633,7 @@ export const MatchHistoryView: React.FC = () => {
           {/* Card 4: Season MVP */}
           <div className="bg-[#1b1b1f] p-4 rounded-sm border border-[#2a292e] flex flex-col justify-between shadow-sm">
             <div className="flex items-center justify-between text-[#ac8889] text-xs font-mono">
-              <span className="uppercase tracking-wider">{selectedYear} MVP HONORS</span>
+              <span className="uppercase tracking-wider">ALL-TIME MVP LEADER</span>
               <span className="material-symbols-outlined text-rose-500 text-sm">hotel_class</span>
             </div>
             <div className="mt-2 flex items-center gap-2 min-w-0">
@@ -727,7 +645,7 @@ export const MatchHistoryView: React.FC = () => {
                   {topMvpPlayer ? `"${topMvpPlayer.nickname}"` : 'Pending MVP'}
                 </span>
                 <span className="text-[10px] font-mono text-[#ac8889] truncate">
-                  {topMvpId ? `${yearMvpCount[topMvpId]} MVP citations in ${selectedYear}` : 'No awards recorded'}
+                  {topMvpId ? `${mvpCount[topMvpId]} MVP citations` : 'No awards recorded'}
                 </span>
               </div>
             </div>
@@ -752,7 +670,7 @@ export const MatchHistoryView: React.FC = () => {
                   : 'bg-[#131317] text-[#ac8889] hover:text-white'
               }`}
             >
-              All Matches ({yearMatches.length})
+              All Matches ({allMatches.length})
             </button>
             <button
               onClick={() => setFilterOutcome('RED')}
@@ -795,7 +713,7 @@ export const MatchHistoryView: React.FC = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search round, pitch, MVP..."
+              placeholder="Search round, MVP..."
               className="w-full bg-[#131317] text-white border border-[#353439] placeholder-[#ac8889]/60 text-xs pl-9 pr-3 py-2 rounded-sm outline-none focus:border-rose-500 transition-colors"
             />
           </div>
@@ -809,11 +727,11 @@ export const MatchHistoryView: React.FC = () => {
             </div>
             <div className="flex flex-col gap-1 max-w-md">
               <h3 className="font-headline text-xl uppercase text-white">
-                No Games Recorded for {selectedYear}
+                No Matches Recorded
               </h3>
               <p className="text-sm text-[#ac8889]">
-                {yearMatches.length === 0
-                  ? `There are currently 0 games recorded in the ${selectedYear} season tab. Record a fixture or connect your backend to sync past results.`
+                {allMatches.length === 0
+                  ? 'There are currently no matches recorded. Record a fixture or connect your backend to sync past results.'
                   : `No fixtures match the selected filter or search term.`}
               </p>
             </div>
@@ -821,13 +739,13 @@ export const MatchHistoryView: React.FC = () => {
               <div className="flex items-center gap-3 mt-2">
                 <button
                   onClick={() => {
-                    setNewDate(`${selectedYear}-10-15`);
+                    setNewDate(new Date().toISOString().slice(0, 10));
                     setIsRecordModalOpen(true);
                   }}
                   className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-headline text-xs uppercase tracking-wider rounded-sm flex items-center gap-2 shadow font-bold"
                 >
                   <span className="material-symbols-outlined text-sm">add_circle</span>
-                  + Record {selectedYear} Match
+                  + Record Match
                 </button>
                 <button
                   onClick={() => setActivePage('admin-dashboard')}
@@ -865,7 +783,7 @@ export const MatchHistoryView: React.FC = () => {
                         ROUND #{match.roundNumber}
                       </span>
                       <span className="font-mono text-[11px] text-[#ac8889] uppercase">
-                        {match.date || `${selectedYear} Season`}
+                        {match.date || 'Date not recorded'}
                       </span>
                       {isSelected && (
                         <span className="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono text-[10px] uppercase font-bold rounded-sm animate-pulse flex items-center gap-1">
@@ -876,7 +794,6 @@ export const MatchHistoryView: React.FC = () => {
 
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-[10px] text-rose-400 uppercase bg-[#131317] border border-[#2a292e] px-2 py-0.5 rounded-sm">
-                        {match.pitch}
                       </span>
                       {isAdmin && (
                         <button
@@ -903,7 +820,7 @@ export const MatchHistoryView: React.FC = () => {
                         </span>
                         <div className="px-5 py-2 bg-[#1b1b1f] border border-amber-500/50 rounded-sm shadow-inner">
                           <span className="font-headline text-2xl sm:text-3xl text-amber-400 font-bold tracking-widest">
-                            TBA
+                            {getPendingScoreDisplay(match)}
                           </span>
                         </div>
                         <span className="font-headline text-base sm:text-lg uppercase text-white font-bold">
@@ -912,22 +829,26 @@ export const MatchHistoryView: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="px-2.5 py-0.5 bg-amber-500/10 text-amber-300 font-mono text-[10px] uppercase tracking-wider rounded font-semibold border border-amber-500/20">
-                          Match Not Played Yet • Score will be entered on matchday
+                          {isMatchOverdue(match) ? 'Matchday Passed • Official Score Requires Update' : 'Match Not Played Yet • Score will be entered on matchday'}
                         </span>
                       </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-3 items-center py-2 bg-[#131317] p-3 rounded-sm border border-[#2a292e]">
+                      {(() => {
+                        const redChuckerWins = match.chuckers.filter((chucker) => chucker.winner === 'RED').length;
+                        const blackChuckerWins = match.chuckers.filter((chucker) => chucker.winner === 'BLACK').length;
+                        return <>
                       {/* Team Red */}
                       <div className="flex flex-col items-center text-center">
                         <span className="font-headline text-sm uppercase text-rose-500 font-bold">
                           TEAM RED
                         </span>
                         <span className="font-headline text-4xl text-rose-500 font-bold leading-none mt-1">
-                          {match.redTotalTries}
+                          {redChuckerWins}
                         </span>
                         <span className="font-mono text-[10px] text-[#ac8889] uppercase mt-1">
-                          Tries Scored
+                          Chuckers Won
                         </span>
                       </div>
 
@@ -945,7 +866,7 @@ export const MatchHistoryView: React.FC = () => {
                           {isRedWinner ? 'RED VICTORY' : isBlackWinner ? 'BLACK VICTORY' : 'MATCH DRAW'}
                         </span>
                         <span className="font-mono text-[10px] text-[#ac8889]">
-                          Score: {match.seriesScore}
+                          Score: {redChuckerWins} - {blackChuckerWins}
                         </span>
                       </div>
 
@@ -955,12 +876,14 @@ export const MatchHistoryView: React.FC = () => {
                           TEAM BLACK
                         </span>
                         <span className="font-headline text-4xl text-white font-bold leading-none mt-1">
-                          {match.blackTotalTries}
+                          {blackChuckerWins}
                         </span>
                         <span className="font-mono text-[10px] text-[#ac8889] uppercase mt-1">
-                          Tries Scored
+                          Chuckers Won
                         </span>
                       </div>
+                        </>;
+                      })()}
                     </div>
                   )}
 
@@ -971,7 +894,9 @@ export const MatchHistoryView: React.FC = () => {
                     </span>
                     {match.isPlayed === false || match.seriesScore === 'TBA' ? (
                       <div className="p-3 bg-[#131317] rounded-sm border border-[#2a292e] text-center text-xs font-mono text-[#ac8889]">
-                        Chuckers scheduled for matchday ({match.date}) • 12 min running clock (Scores TBA)
+                        {isMatchOverdue(match)
+                          ? `Matchday passed (${match.date}) • Scores require an admin update`
+                          : `Chuckers scheduled for matchday (${match.date}) • 12 min running clock (Scores TBA)`}
                       </div>
                     ) : (
                       <div className="grid grid-cols-3 gap-2">
@@ -1185,7 +1110,7 @@ export const MatchHistoryView: React.FC = () => {
             <div className="flex items-center justify-between border-b border-[#2a292e] pb-3">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-rose-500">note_add</span>
-                <h3 className="font-headline text-lg uppercase text-white">Log Past Fixture ({selectedYear})</h3>
+                <h3 className="font-headline text-lg uppercase text-white">Log Match</h3>
               </div>
               <button onClick={() => setIsRecordModalOpen(false)} className="text-[#ac8889] hover:text-white">
                 <span className="material-symbols-outlined">close</span>
@@ -1221,19 +1146,6 @@ export const MatchHistoryView: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-mono uppercase text-[#ac8889] mb-1">
-                  Pitch Location
-                </label>
-                <input
-                  type="text"
-                  value={newPitch}
-                  onChange={(e) => setNewPitch(e.target.value)}
-                  placeholder="Pitch 2 Floodlights"
-                  required
-                  className="w-full bg-[#131317] border border-[#2a292e] text-white px-3 py-2 text-xs rounded-sm outline-none focus:border-rose-500"
-                />
-              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1334,7 +1246,7 @@ export const MatchHistoryView: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-headline text-xs uppercase tracking-wider rounded-sm font-bold shadow-md"
                 >
-                  Save to {selectedYear} Archive
+                  Save Match
                 </button>
               </div>
             </form>
@@ -1365,7 +1277,7 @@ export const MatchHistoryView: React.FC = () => {
                       <span className="font-mono text-[11px] text-[#ac8889]">• {activeScorecardMatch.date || 'Wednesday Touch'}</span>
                     </div>
                     <span className="text-xs text-[#ac8889] mt-0.5">
-                      {clubConfig.clubName} • {activeScorecardMatch.pitch} • Official Referee: {clubConfig.referee}
+                      {clubConfig.clubName}
                     </span>
                   </div>
                 </div>
@@ -1400,9 +1312,9 @@ export const MatchHistoryView: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <span className="font-headline text-lg sm:text-xl uppercase text-rose-500 font-bold">TEAM RED</span>
                     <span className="font-headline text-4xl sm:text-5xl text-rose-500 font-bold leading-none mt-1">
-                      {activeScorecardMatch.redTotalTries}
+                      {activeScorecardMatch.chuckers.filter((chucker) => chucker.winner === 'RED').length}
                     </span>
-                    <span className="font-mono text-[10px] text-[#ac8889] uppercase mt-1">Tries</span>
+                    <span className="font-mono text-[10px] text-[#ac8889] uppercase mt-1">Chuckers Won</span>
                   </div>
 
                   <div className="flex flex-col items-center px-4 py-2 bg-[#1b1b1f] border border-[#2a292e] rounded-sm">
@@ -1415,16 +1327,16 @@ export const MatchHistoryView: React.FC = () => {
                         : 'HONOURS EVEN'}
                     </span>
                     <span className="font-mono text-[10px] text-[#ac8889]">
-                      Chucker Score: {activeScorecardMatch.seriesScore}
+                      Chucker Score: {activeScorecardMatch.chuckers.filter((chucker) => chucker.winner === 'RED').length} - {activeScorecardMatch.chuckers.filter((chucker) => chucker.winner === 'BLACK').length}
                     </span>
                   </div>
 
                   <div className="flex flex-col items-center">
                     <span className="font-headline text-lg sm:text-xl uppercase text-zinc-300 font-bold">TEAM BLACK</span>
                     <span className="font-headline text-4xl sm:text-5xl text-white font-bold leading-none mt-1">
-                      {activeScorecardMatch.blackTotalTries}
+                      {activeScorecardMatch.chuckers.filter((chucker) => chucker.winner === 'BLACK').length}
                     </span>
-                    <span className="font-mono text-[10px] text-[#ac8889] uppercase mt-1">Tries</span>
+                    <span className="font-mono text-[10px] text-[#ac8889] uppercase mt-1">Chuckers Won</span>
                   </div>
                 </div>
 
@@ -1498,33 +1410,27 @@ export const MatchHistoryView: React.FC = () => {
                 </div>
 
                 {(() => {
-                  const redScorersList = Object.entries(activeScorecardMatch.redScorers || {})
-                    .filter(([_, count]) => count > 0)
-                    .map(([id, count]) => {
-                      const p = players.find((pl) => pl.id === id);
-                      return {
-                        id,
-                        name: p ? `"${p.nickname}" (${p.fullName})` : id,
-                        nickname: p?.nickname || id,
-                        tries: count,
-                        jersey: p?.jerseyNumber,
-                        position: p?.position || 'Touch Specialist',
-                      };
-                    });
+                  const buildMatchRoster = (lineupIds: string[] | undefined, scorerMap: Record<string, number> | undefined) => {
+                    const triesByPlayer = scorerMap || {};
+                    const participantIds = Array.from(new Set([
+                      ...(lineupIds || []),
+                      ...Object.keys(triesByPlayer),
+                    ]));
 
-                  const blackScorersList = Object.entries(activeScorecardMatch.blackScorers || {})
-                    .filter(([_, count]) => count > 0)
-                    .map(([id, count]) => {
+                    return participantIds.map((id) => {
                       const p = players.find((pl) => pl.id === id);
                       return {
                         id,
-                        name: p ? `"${p.nickname}" (${p.fullName})` : id,
                         nickname: p?.nickname || id,
-                        tries: count,
+                        tries: triesByPlayer[id] || 0,
                         jersey: p?.jerseyNumber,
-                        position: p?.position || 'Touch Specialist',
+                        position: p?.position || 'Position not recorded',
                       };
                     });
+                  };
+
+                  const redScorersList = buildMatchRoster(activeScorecardMatch.redLineup, activeScorecardMatch.redScorers);
+                  const blackScorersList = buildMatchRoster(activeScorecardMatch.blackLineup, activeScorecardMatch.blackScorers);
 
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1534,11 +1440,11 @@ export const MatchHistoryView: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <span className="w-3 h-3 rounded-full bg-rose-600"></span>
                             <span className="font-headline text-sm uppercase text-rose-400 font-bold">
-                              TEAM RED SCORERS
+                              TEAM RED PLAYERS
                             </span>
                           </div>
                           <span className="px-2 py-0.5 bg-rose-600/20 text-rose-400 font-mono text-xs font-bold rounded border border-rose-500/30">
-                            {activeScorecardMatch.redTotalTries} Tries Total
+                            {redScorersList.length} Players • {activeScorecardMatch.redTotalTries} Tries
                           </span>
                         </div>
 
@@ -1580,7 +1486,7 @@ export const MatchHistoryView: React.FC = () => {
                           </div>
                         ) : (
                           <div className="py-6 text-center text-[#ac8889] text-xs font-mono bg-[#1b1b1f] border border-dashed border-[#2a292e] rounded-sm p-4">
-                            <span>No individual scorers assigned for Team Red yet.</span>
+                            <span>No Team Red players or try scorers are recorded in this match yet.</span>
                             <div className="mt-2">
                               <button
                                 data-no-export="true"
@@ -1600,11 +1506,11 @@ export const MatchHistoryView: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <span className="w-3 h-3 rounded-full bg-zinc-400"></span>
                             <span className="font-headline text-sm uppercase text-zinc-300 font-bold">
-                              TEAM BLACK SCORERS
+                              TEAM BLACK PLAYERS
                             </span>
                           </div>
                           <span className="px-2 py-0.5 bg-zinc-800 text-zinc-300 font-mono text-xs font-bold rounded border border-zinc-700">
-                            {activeScorecardMatch.blackTotalTries} Tries Total
+                            {blackScorersList.length} Players • {activeScorecardMatch.blackTotalTries} Tries
                           </span>
                         </div>
 
@@ -1646,7 +1552,7 @@ export const MatchHistoryView: React.FC = () => {
                           </div>
                         ) : (
                           <div className="py-6 text-center text-[#ac8889] text-xs font-mono bg-[#1b1b1f] border border-dashed border-[#2a292e] rounded-sm p-4">
-                            <span>No individual scorers assigned for Team Black yet.</span>
+                            <span>No Team Black players or try scorers are recorded in this match yet.</span>
                             <div className="mt-2">
                               <button
                                 data-no-export="true"

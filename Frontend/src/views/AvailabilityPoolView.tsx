@@ -20,14 +20,25 @@ export const AvailabilityPoolView: React.FC = () => {
   const [filter, setFilter] = useState<'all' | PlayerStatus>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const nextWednesday = (() => {
+    const date = new Date();
+    const daysAhead = (3 - date.getDay() + 7) % 7;
+    date.setDate(date.getDate() + daysAhead);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  })();
+  const [availabilityDate, setAvailabilityDate] = useState(
+    /^\d{4}-\d{2}-\d{2}$/.test(clubConfig.nextMatchdayDate) ? clubConfig.nextMatchdayDate : nextWednesday
+  );
+  const weeklyStatus = (player: (typeof players)[number]): PlayerStatus =>
+    player.availabilityByDate?.[availabilityDate] || 'pending';
 
   // Filtered player roster
-  const availableCount = players.filter((p) => p.status === 'available').length;
-  const pendingCount = players.filter((p) => p.status === 'pending').length;
-  const unavailableCount = players.filter((p) => p.status === 'unavailable').length;
+  const availableCount = players.filter((p) => weeklyStatus(p) === 'available').length;
+  const pendingCount = players.filter((p) => weeklyStatus(p) === 'pending').length;
+  const unavailableCount = players.filter((p) => weeklyStatus(p) === 'unavailable').length;
 
   const filteredPlayers = players.filter((player) => {
-    const matchesFilter = filter === 'all' || player.status === filter;
+    const matchesFilter = filter === 'all' || weeklyStatus(player) === filter;
     const matchesSearch =
       player.nickname.toLowerCase().includes(searchTerm.toLowerCase()) ||
       player.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -35,7 +46,7 @@ export const AvailabilityPoolView: React.FC = () => {
     return matchesFilter && matchesSearch;
   });
 
-  const quorumTarget = 14;
+  const quorumTarget = 18;
   const quorumPercent = Math.min(100, Math.round((availableCount / quorumTarget) * 100));
   const slotsOpen = Math.max(0, quorumTarget - availableCount);
 
@@ -47,7 +58,7 @@ export const AvailabilityPoolView: React.FC = () => {
       `"${p.nickname}"`,
       `"${p.fullName}"`,
       p.position,
-      p.status.toUpperCase(),
+      weeklyStatus(p).toUpperCase(),
       p.caps,
       p.tries,
       p.chuckersWon,
@@ -87,7 +98,7 @@ export const AvailabilityPoolView: React.FC = () => {
                 MONDAY POOL <span className="text-rose-500">REGISTRATION</span>
               </h1>
               <p className="text-sm text-[#ac8889]">
-                Wednesday Matchday • 5-a-Side Clash (3 Games) • Target: 10–14 Eligible Players (5–7 per side)
+                Wednesday Matchday • 9v9 Clash (3 Games) • 18 Players (9 per side), No Subs
               </p>
             </div>
 
@@ -103,7 +114,7 @@ export const AvailabilityPoolView: React.FC = () => {
               </div>
               <div className="my-2 flex items-baseline gap-1">
                 <span className="font-headline text-4xl text-white">{availableCount}</span>
-                <span className="font-headline text-sm text-[#ac8889]">/ 14 CAP</span>
+                <span className="font-headline text-sm text-[#ac8889]">/ 18 PLAYERS</span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <div className="w-full bg-[#353439] h-2 rounded-sm overflow-hidden flex">
@@ -125,12 +136,12 @@ export const AvailabilityPoolView: React.FC = () => {
                 <span className="material-symbols-outlined text-white text-lg">sports_rugby</span>
               </div>
               <div className="my-2">
-                <div className="font-headline text-lg uppercase text-white leading-tight">5-A-SIDE + SUBS</div>
+                <div className="font-headline text-lg uppercase text-white leading-tight">9v9 • NO SUBS</div>
                 <div className="text-xs text-[#ac8889]">Team Red vs Team Black (3 Chuckers)</div>
               </div>
               <div className="font-mono text-[10px] text-[#ac8889] uppercase tracking-wide flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                6v6 Projected Active Roster
+                9 Players Per Team
               </div>
             </div>
 
@@ -217,6 +228,15 @@ export const AvailabilityPoolView: React.FC = () => {
 
           {/* Search & Add Actions */}
           <div className="flex items-center gap-2 flex-1 md:max-w-md justify-end">
+            <label className="flex flex-col gap-1 shrink-0 font-mono text-[9px] uppercase text-[#ac8889]">
+              Wednesday Pool
+              <input
+                type="date"
+                value={availabilityDate}
+                onChange={(event) => setAvailabilityDate(event.target.value)}
+                className="bg-[#131317] text-white border border-[#353439] text-xs px-2 py-1.5 rounded-sm outline-none focus:border-rose-500"
+              />
+            </label>
             <div className="relative w-full">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#ac8889] text-[18px]">
                 search
@@ -290,8 +310,9 @@ export const AvailabilityPoolView: React.FC = () => {
             /* Player Cards Grid */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredPlayers.map((player) => {
-                const isAvail = player.status === 'available';
-                const isPending = player.status === 'pending';
+                const playerWeeklyStatus = weeklyStatus(player);
+                const isAvail = playerWeeklyStatus === 'available';
+                const isPending = playerWeeklyStatus === 'pending';
 
                 return (
                   <div
@@ -397,14 +418,14 @@ export const AvailabilityPoolView: React.FC = () => {
                         <span className="material-symbols-outlined text-[14px]">
                           {isAvail ? 'check_circle' : isPending ? 'schedule' : 'cancel'}
                         </span>
-                        {player.status}
+                        {playerWeeklyStatus}
                       </span>
 
                       {/* Admin controls: Only Admin can toggle availability and delete players */}
                       {isAdmin ? (
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => togglePlayerStatus(player.id)}
+                            onClick={() => togglePlayerStatus(player.id, availabilityDate)}
                             className="px-2 py-1 bg-[#2a292e] hover:bg-rose-600 hover:text-white text-[#e4e1e7] font-headline text-[11px] uppercase rounded-sm transition-colors font-bold"
                             title="Cycle status: Available -> Pending -> Unavailable (Admin)"
                           >
@@ -447,11 +468,11 @@ export const AvailabilityPoolView: React.FC = () => {
                   Tactical Formation Simulation
                 </span>
                 <span className="px-1.5 py-0.5 bg-rose-500/20 text-rose-400 border border-rose-500/30 font-mono text-[10px] uppercase rounded-sm">
-                  5-a-Side Flow
+                  9v9 Flow
                 </span>
               </div>
               <span className="font-mono text-xs text-[#ac8889] uppercase">
-                Rolling Sub Box (70m x 50m)
+                9 Players Per Side (70m x 50m)
               </span>
             </div>
 

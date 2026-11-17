@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { ChuckerScore, MatchResult } from '../types';
+import { getPendingScoreDisplay, isMatchOverdue } from '../utils/matchStatus';
 
 export const MatchResultsCaptureView: React.FC = () => {
   const {
@@ -56,10 +57,6 @@ export const MatchResultsCaptureView: React.FC = () => {
     return existing?.date || new Date().toISOString().split('T')[0];
   });
 
-  const [pitchInput, setPitchInput] = useState<string>(() => {
-    const existing = typeof targetMatchMode === 'number' ? matchResults.find((m) => m.roundNumber === targetMatchMode) : null;
-    return existing?.pitch || clubConfig.pitchLocation;
-  });
 
   // 3-Chucker scores state
   const [chuckers, setChuckers] = useState<[ChuckerScore, ChuckerScore, ChuckerScore]>(() => {
@@ -88,8 +85,9 @@ export const MatchResultsCaptureView: React.FC = () => {
   // MVP selection
   const [selectedMvpId, setSelectedMvpId] = useState<string>(() => {
     const existing = typeof targetMatchMode === 'number' ? matchResults.find((m) => m.roundNumber === targetMatchMode) : null;
-    return existing?.mvpPlayerId || (players[0] ? players[0].id : '');
+    return existing?.mvpPlayerId || '';
   });
+  const [correctionReason, setCorrectionReason] = useState('');
 
   const [mvpCitation, setMvpCitation] = useState<string>(() => {
     const existing = typeof targetMatchMode === 'number' ? matchResults.find((m) => m.roundNumber === targetMatchMode) : null;
@@ -102,7 +100,6 @@ export const MatchResultsCaptureView: React.FC = () => {
       const nextRound = matchResults.length > 0 ? Math.max(...matchResults.map((m) => m.roundNumber)) + 1 : clubConfig.matchdayCycle;
       setRoundNumberInput(nextRound);
       setDateInput(new Date().toISOString().split('T')[0]);
-      setPitchInput(clubConfig.pitchLocation);
       setChuckers([
         { chuckerNumber: 1, redScore: 0, blackScore: 0, elapsedTime: "12' FT", winner: 'DRAW' },
         { chuckerNumber: 2, redScore: 0, blackScore: 0, elapsedTime: "12' FT", winner: 'DRAW' },
@@ -110,14 +107,14 @@ export const MatchResultsCaptureView: React.FC = () => {
       ]);
       setRedScorerTries({});
       setBlackScorerTries({});
-      setSelectedMvpId(players[0] ? players[0].id : '');
+      setSelectedMvpId('');
+      setCorrectionReason('');
       setMvpCitation('Outstanding match performance and tactical contribution.');
     } else {
       const match = matchResults.find((m) => m.roundNumber === target);
       if (match) {
         setRoundNumberInput(match.roundNumber);
         setDateInput(match.date || new Date().toISOString().split('T')[0]);
-        setPitchInput(match.pitch || clubConfig.pitchLocation);
         setChuckers(
           match.chuckers && match.chuckers.length === 3
             ? JSON.parse(JSON.stringify(match.chuckers))
@@ -129,8 +126,9 @@ export const MatchResultsCaptureView: React.FC = () => {
         );
         setRedScorerTries(match.redScorers ? { ...match.redScorers } : {});
         setBlackScorerTries(match.blackScorers ? { ...match.blackScorers } : {});
-        setSelectedMvpId(match.mvpPlayerId || (players[0] ? players[0].id : ''));
+        setSelectedMvpId(match.mvpPlayerId || '');
         setMvpCitation(match.mvpCitation || 'Outstanding match performance and tactical contribution.');
+        setCorrectionReason('');
       }
     }
   };
@@ -161,9 +159,7 @@ export const MatchResultsCaptureView: React.FC = () => {
   };
 
   const handleStartNewMatch = () => {
-    setTargetMatchMode('new');
-    loadMatchData('new');
-    setViewMode('editor');
+    setActivePage('team-selection');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -174,12 +170,17 @@ export const MatchResultsCaptureView: React.FC = () => {
   };
 
   // Active drafted players plus any players who scored in this match
-  const redPlayers = players.filter((p) => p.team === 'red' || (redScorerTries[p.id] && redScorerTries[p.id] > 0));
-  const blackPlayers = players.filter((p) => p.team === 'black' || (blackScorerTries[p.id] && blackScorerTries[p.id] > 0));
+  const activeMatch = typeof targetMatchMode === 'number'
+    ? matchResults.find((match) => match.roundNumber === targetMatchMode)
+    : undefined;
+  const redPlayerIds = activeMatch?.redLineup || players.filter((player) => player.team === 'red').map((player) => player.id);
+  const blackPlayerIds = activeMatch?.blackLineup || players.filter((player) => player.team === 'black').map((player) => player.id);
+  const redPlayers = redPlayerIds.map((id) => players.find((player) => player.id === id)).filter((player): player is (typeof players)[number] => !!player);
+  const blackPlayers = blackPlayerIds.map((id) => players.find((player) => player.id === id)).filter((player): player is (typeof players)[number] => !!player);
 
   // Fallback to squad players if none are drafted
-  const effectiveRedPlayers = redPlayers.length > 0 ? redPlayers : players.slice(0, 6);
-  const effectiveBlackPlayers = blackPlayers.length > 0 ? blackPlayers : players.slice(6, 12);
+  const effectiveRedPlayers = redPlayers;
+  const effectiveBlackPlayers = blackPlayers;
 
   // Update a chucker score
   const updateChuckerScore = (chuckerIdx: 0 | 1 | 2, team: 'red' | 'black', delta: number) => {
@@ -188,9 +189,9 @@ export const MatchResultsCaptureView: React.FC = () => {
       const target = { ...copy[chuckerIdx] };
 
       if (team === 'red') {
-        target.redScore = Math.max(0, Math.min(9, target.redScore + delta));
+        target.redScore = Math.max(0, Math.min(5, target.redScore + delta));
       } else {
-        target.blackScore = Math.max(0, Math.min(9, target.blackScore + delta));
+        target.blackScore = Math.max(0, Math.min(5, target.blackScore + delta));
       }
 
       if (target.redScore > target.blackScore) {
@@ -241,11 +242,31 @@ export const MatchResultsCaptureView: React.FC = () => {
   const totalRedTries = Object.values(redScorerTries).reduce((a, b) => a + b, 0);
   const totalBlackTries = Object.values(blackScorerTries).reduce((a, b) => a + b, 0);
 
-  const selectedMvpPlayer = players.find((p) => p.id === selectedMvpId) || effectiveRedPlayers[0] || players[0];
+  const matchParticipants = [...effectiveRedPlayers, ...effectiveBlackPlayers];
+  const selectedMvpPlayer = matchParticipants.find((p) => p.id === selectedMvpId);
 
   const handleFinalize = async () => {
     if (!roundNumberInput || roundNumberInput < 1) {
       showToast('Please enter a valid round number');
+      return;
+    }
+    if (effectiveRedPlayers.length !== 9 || effectiveBlackPlayers.length !== 9) {
+      showToast('Each team needs exactly 9 players in the saved match lineup before results can be finalized.');
+      return;
+    }
+    if (chuckers.some((chucker) => !((chucker.redScore === 5 && chucker.blackScore < 5) || (chucker.blackScore === 5 && chucker.redScore < 5)))) {
+      showToast('Each chucker needs one team on 5 and the other team between 0 and 4.');
+      return;
+    }
+    if (!selectedMvpId || !matchParticipants.some((player) => player.id === selectedMvpId)) {
+      showToast('Select an MVP from the players in this match.');
+      return;
+    }
+    if (activeMatch?.isFinalized && !correctionReason.trim()) {
+      showToast('Enter a correction reason before changing a finalized match.');
+      return;
+    }
+    if (!activeMatch?.isFinalized && !window.confirm('Finalize this match and update all player career statistics?')) {
       return;
     }
 
@@ -255,17 +276,21 @@ export const MatchResultsCaptureView: React.FC = () => {
       roundNumber: Number(roundNumberInput),
       date: dateInput,
       year: yearComputed,
-      pitch: pitchInput || clubConfig.pitchLocation,
       chuckers,
       isPlayed: true,
       redTotalTries: totalRedTries,
       blackTotalTries: totalBlackTries,
       seriesWinner,
       seriesScore: `${redChuckerWins} - ${blackChuckerWins}`,
-      mvpPlayerId: selectedMvpId || effectiveRedPlayers[0]?.id || (players[0] ? players[0].id : ''),
+      mvpPlayerId: selectedMvpId,
       mvpCitation,
       redScorers: redScorerTries,
       blackScorers: blackScorerTries,
+      redLineup: redPlayerIds,
+      blackLineup: blackPlayerIds,
+      isFinalized: true,
+      finalizedAt: activeMatch?.finalizedAt,
+      correctionReason: correctionReason.trim() || undefined,
     };
 
     const isUpdate = targetMatchMode !== 'new';
@@ -291,11 +316,10 @@ export const MatchResultsCaptureView: React.FC = () => {
       const mvp = players.find((p) => p.id === m.mvpPlayerId);
       const matchesRound = m.roundNumber.toString().includes(q);
       const matchesDate = (m.date || '').toLowerCase().includes(q);
-      const matchesPitch = (m.pitch || '').toLowerCase().includes(q);
       const matchesMvp =
         (mvp?.nickname || '').toLowerCase().includes(q) ||
         (mvp?.fullName || '').toLowerCase().includes(q);
-      return matchesRound || matchesDate || matchesPitch || matchesMvp;
+      return matchesRound || matchesDate || matchesMvp;
     }
     return true;
   });
@@ -339,7 +363,7 @@ export const MatchResultsCaptureView: React.FC = () => {
                 ALL MATCH FIXTURES ({matchResults.length})
               </h1>
               <p className="text-xs sm:text-sm text-[#ac8889] max-w-2xl">
-                Click any match fixture below to edit its scores, 3 chuckers, try scorers, and referee MVP award, or record a new matchday fixture.
+                Click any match fixture below to edit its scores, 3 chuckers, try scorers, and referee MVP award. Create new fixtures through Team Selection.
               </p>
             </div>
 
@@ -350,7 +374,7 @@ export const MatchResultsCaptureView: React.FC = () => {
                 className="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-headline text-xs uppercase tracking-wider font-bold rounded-sm transition-all shadow-[0_0_16px_rgba(225,29,72,0.4)] flex items-center gap-2"
               >
                 <span className="material-symbols-outlined text-base">add_circle</span>
-                <span>+ Record New Fixture</span>
+                <span>+ Create in Team Selection</span>
               </button>
               <button
                 type="button"
@@ -374,7 +398,7 @@ export const MatchResultsCaptureView: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search round number, date, pitch, player..."
+                placeholder="Search round number, date, player..."
                 className="w-full bg-[#1b1b1f] text-white pl-9 pr-3 py-2 text-xs font-mono rounded-sm border border-[#2a292e] focus:border-rose-500 outline-none"
               />
               {searchQuery && (
@@ -427,7 +451,7 @@ export const MatchResultsCaptureView: React.FC = () => {
                     key={`capture-match-${match.year || ''}-${match.roundNumber}-${match.date || ''}-${idx}`}
                     className="bg-[#1b1b1f] border border-[#2a292e] hover:border-rose-500/70 rounded-sm p-4 flex flex-col justify-between gap-4 shadow-lg hover:shadow-2xl transition-all group"
                   >
-                    {/* Top Row: Round # & Pitch */}
+                    {/* Top Row: Round # & Match Date */}
                     <div className="flex items-center justify-between border-b border-[#2a292e] pb-2.5">
                       <div className="flex items-center gap-2">
                         <span className="px-2 py-0.5 bg-rose-600 text-white font-headline text-xs uppercase font-bold rounded-sm shadow">
@@ -439,7 +463,7 @@ export const MatchResultsCaptureView: React.FC = () => {
                       </div>
                       {match.isPlayed === false || match.seriesScore === 'TBA' ? (
                         <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-headline text-[10px] uppercase font-bold rounded-sm">
-                          TBA • SCHEDULED
+                          {isMatchOverdue(match) ? 'SCORE REQUIRED' : 'TBA • SCHEDULED'}
                         </span>
                       ) : (
                         <span
@@ -466,7 +490,7 @@ export const MatchResultsCaptureView: React.FC = () => {
                         <div className="flex items-center justify-around w-full">
                           <span className="font-headline text-xs uppercase text-rose-400 font-bold">TEAM RED</span>
                           <span className="px-3 py-1 bg-[#1b1b1f] border border-amber-500/50 text-amber-400 font-headline text-lg font-bold rounded-sm tracking-wider">
-                            TBA
+                            {getPendingScoreDisplay(match)}
                           </span>
                           <span className="font-headline text-xs uppercase text-zinc-300 font-bold">TEAM BLACK</span>
                         </div>
@@ -481,20 +505,24 @@ export const MatchResultsCaptureView: React.FC = () => {
                         className="cursor-pointer bg-[#141418] hover:bg-[#191922] p-3 rounded-sm border border-[#2a292e] hover:border-rose-500/40 flex items-center justify-around transition-all shadow-inner"
                         title="Click to edit this match"
                       >
+                        {(() => {
+                          const redChuckerWins = match.chuckers.filter((chucker) => chucker.winner === 'RED').length;
+                          const blackChuckerWins = match.chuckers.filter((chucker) => chucker.winner === 'BLACK').length;
+                          return <>
                         {/* Red */}
                         <div className="flex flex-col items-center">
                           <span className="font-headline text-xs uppercase text-rose-400 font-bold">TEAM RED</span>
                           <span className="font-headline text-3xl font-bold text-rose-500 leading-none my-1">
-                            {match.redTotalTries}
+                            {redChuckerWins}
                           </span>
-                          <span className="font-mono text-[9px] uppercase text-[#ac8889]">Tries</span>
+                          <span className="font-mono text-[9px] uppercase text-[#ac8889]">Chuckers Won</span>
                         </div>
 
                         {/* Series Clash */}
                         <div className="flex flex-col items-center gap-1">
                           <span className="font-headline text-xs text-[#ac8889] font-bold">VS</span>
                           <span className="font-mono text-[10px] text-white bg-[#2a292e] px-2 py-0.5 rounded font-bold">
-                            {match.seriesScore}
+                            {redChuckerWins} - {blackChuckerWins}
                           </span>
                         </div>
 
@@ -502,10 +530,12 @@ export const MatchResultsCaptureView: React.FC = () => {
                         <div className="flex flex-col items-center">
                           <span className="font-headline text-xs uppercase text-zinc-300 font-bold">TEAM BLACK</span>
                           <span className="font-headline text-3xl font-bold text-white leading-none my-1">
-                            {match.blackTotalTries}
+                            {blackChuckerWins}
                           </span>
-                          <span className="font-mono text-[9px] uppercase text-[#ac8889]">Tries</span>
+                          <span className="font-mono text-[9px] uppercase text-[#ac8889]">Chuckers Won</span>
                         </div>
+                          </>;
+                        })()}
                       </div>
                     )}
 
@@ -542,10 +572,6 @@ export const MatchResultsCaptureView: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Pitch & Venue */}
-                    <div className="text-[10px] font-mono text-[#ac8889] truncate">
-                      📍 {match.pitch}
-                    </div>
 
                     {/* Action Buttons Footer */}
                     <div className="pt-2 border-t border-[#2a292e] flex items-center gap-2">
@@ -609,7 +635,7 @@ export const MatchResultsCaptureView: React.FC = () => {
                   {targetMatchMode !== 'new' ? `EDITING MATCH ROUND #${roundNumberInput}` : 'RECORDING NEW MATCHDAY FIXTURE'}
                 </span>
                 <span className="text-[10px] font-mono text-[#ac8889]">
-                  {targetMatchMode !== 'new' ? `Fixture Date: ${dateInput} • ${pitchInput}` : 'Create a brand new fixture'}
+                  {targetMatchMode !== 'new' ? `Fixture Date: ${dateInput}` : 'Create a brand new fixture'}
                 </span>
               </div>
             </div>
@@ -728,7 +754,7 @@ export const MatchResultsCaptureView: React.FC = () => {
                   {targetMatchMode !== 'new' ? `ROUND #${roundNumberInput} ACTIVE` : 'NEW MATCHDAY'}
                 </span>
                 <span className="font-mono text-[11px] uppercase tracking-widest text-[#ac8889]">
-                  WEDNESDAY TOUCH 5-A-SIDE
+                  WEDNESDAY TOUCH 9v9
                 </span>
                 <span className="font-mono text-[11px] uppercase text-rose-300">
                   3 CHUCKERS PER FIXTURE
@@ -786,18 +812,6 @@ export const MatchResultsCaptureView: React.FC = () => {
                     value={dateInput}
                     onChange={(e) => setDateInput(e.target.value)}
                     placeholder="YYYY-MM-DD or Wednesday"
-                    className="w-full bg-[#1f1f23] text-white border border-[#353439] focus:border-rose-500 px-2.5 py-1.5 text-xs font-mono rounded-sm outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-mono uppercase text-[#ac8889] mb-1">
-                    Pitch Location
-                  </label>
-                  <input
-                    type="text"
-                    value={pitchInput}
-                    onChange={(e) => setPitchInput(e.target.value)}
-                    placeholder="Main Arena Lawn A"
                     className="w-full bg-[#1f1f23] text-white border border-[#353439] focus:border-rose-500 px-2.5 py-1.5 text-xs font-mono rounded-sm outline-none"
                   />
                 </div>
@@ -1186,8 +1200,8 @@ export const MatchResultsCaptureView: React.FC = () => {
                 onChange={(e) => setSelectedMvpId(e.target.value)}
                 className="bg-[#131317] text-white border border-[#353439] px-2 py-1 text-xs font-mono rounded-sm outline-none"
               >
-                <option value="">Other player...</option>
-                {players.map((p) => (
+                <option value="">Select match player...</option>
+                {matchParticipants.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.nickname} ({p.fullName})
                   </option>
@@ -1234,6 +1248,17 @@ export const MatchResultsCaptureView: React.FC = () => {
         </div>
 
         {/* Database Commit Protocol */}
+        {activeMatch?.isFinalized && (
+          <label className="flex flex-col gap-1.5 bg-amber-950/20 border border-amber-500/30 rounded-sm p-4 font-mono text-[10px] uppercase text-amber-300">
+            Correction Reason (required)
+            <textarea
+              value={correctionReason}
+              onChange={(event) => setCorrectionReason(event.target.value)}
+              placeholder="Explain why this finalized result is being corrected..."
+              className="min-h-20 bg-[#131317] border border-amber-500/30 text-white rounded-sm p-2 text-xs normal-case outline-none focus:border-amber-400"
+            />
+          </label>
+        )}
         <div className="bg-[#0e0e12] border border-[#2a292e] rounded-sm p-5 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3 max-w-xl">
             <div className="w-9 h-9 rounded bg-rose-500/20 text-rose-500 flex items-center justify-center shrink-0 border border-rose-500/30">

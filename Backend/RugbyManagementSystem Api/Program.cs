@@ -21,6 +21,12 @@ namespace RugbyManagementSystem_Api
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // Keep API logging portable and avoid requiring Windows Event Log
+            // source permissions when the app runs under a normal user account.
+            builder.Logging.ClearProviders();
+            builder.Logging.AddConsole();
+            builder.Logging.AddDebug();
+
 
             builder.Services.AddScoped<TokenService>();
 

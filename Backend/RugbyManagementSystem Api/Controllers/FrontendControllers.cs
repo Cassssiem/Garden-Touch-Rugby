@@ -23,6 +23,12 @@ public sealed class FrontendPlayersController(IFrontendAppService service) : Con
     [HttpPut("{id}"), Authorize]
     public async Task<ActionResult<FrontendPlayerDto>> Update(string id, FrontendPlayerDto player)
     {
+        var existing = (await service.GetPlayersAsync()).FirstOrDefault(x => x.Id == id);
+        if (existing is null) return NotFound();
+        var availabilityChanged = !existing.AvailabilityByDate.OrderBy(x => x.Key)
+            .SequenceEqual(player.AvailabilityByDate.OrderBy(x => x.Key)) || existing.Status != player.Status;
+        if (availabilityChanged && !User.IsInRole("Admin")) return Forbid();
+
         if (!User.IsInRole("Admin") && !User.IsInRole("SELECTOR"))
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -63,6 +69,38 @@ public sealed class FrontendMatchesController(IFrontendAppService service) : Con
             return BadRequest(new { message = "Matches can only be created on Wednesdays." });
         }
 
+        var redLineup = match.RedLineup ?? [];
+        var blackLineup = match.BlackLineup ?? [];
+        if (redLineup.Intersect(blackLineup).Any())
+            return BadRequest(new { message = "A player cannot be selected for both teams." });
+        if (redLineup.Concat(blackLineup).Distinct().Count() > 18)
+            return BadRequest(new { message = "A match pool cannot contain more than 18 players." });
+        if ((redLineup.Count > 0 || blackLineup.Count > 0) && (redLineup.Count < 5 || blackLineup.Count < 5))
+            return BadRequest(new { message = "Both teams require at least 5 selected players." });
+
+        var existing = (await service.GetMatchesAsync()).FirstOrDefault(x =>
+            x.RoundNumber == match.RoundNumber && x.Year == (match.Year ?? matchDate.Year));
+
+        if (existing?.IsFinalized == true && string.IsNullOrWhiteSpace(match.CorrectionReason))
+            return BadRequest(new { message = "Enter a correction reason before changing a finalized match." });
+
+        if (match.IsPlayed == true)
+        {
+            if (match.Chuckers.Count != 3 || match.Chuckers.Any(chucker =>
+                    !((chucker.RedScore == 5 && chucker.BlackScore is >= 0 and < 5) ||
+                      (chucker.BlackScore == 5 && chucker.RedScore is >= 0 and < 5))))
+                return BadRequest(new { message = "Each chucker must have one team on 5 and the other team between 0 and 4." });
+
+            var participants = redLineup.Concat(blackLineup).ToHashSet();
+            if (string.IsNullOrWhiteSpace(match.MvpPlayerId) || !participants.Contains(match.MvpPlayerId))
+                return BadRequest(new { message = "Select an MVP from the saved match lineups." });
+            if (match.RedScorers.Keys.Any(id => !redLineup.Contains(id)) ||
+                match.BlackScorers.Keys.Any(id => !blackLineup.Contains(id)))
+                return BadRequest(new { message = "Try scorers must belong to their saved match team." });
+            match.IsFinalized = true;
+            match.FinalizedAt ??= DateTimeOffset.UtcNow;
+        }
+
         return Ok(await service.UpsertMatchAsync(match));
     }
     [HttpDelete("{roundNumber:int}"), Authorize(Roles = "Admin")]
@@ -88,6 +126,16 @@ public sealed class FrontendAuthController(IFrontendAppService service, TokenSer
     {
         var user = await service.RegisterAsync(request);
         return Ok(new FrontendAuthResponseDto { Token = tokens.GenerateFrontendToken(user), User = user });
+    }
+
+    [HttpPost("refresh"), Authorize]
+    public async Task<ActionResult<FrontendAuthResponseDto>> Refresh()
+    {
+        var id = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var user = await service.GetUserAsync(id);
+        return user is null
+            ? Unauthorized()
+            : Ok(new FrontendAuthResponseDto { Token = tokens.GenerateFrontendToken(user), User = user });
     }
 }
 
