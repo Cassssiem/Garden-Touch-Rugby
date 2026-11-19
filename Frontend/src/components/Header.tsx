@@ -69,18 +69,18 @@ export const Header: React.FC = () => {
   return (
     <>
       <header className="fixed top-0 w-full z-50 bg-[#0e0e12]/95 backdrop-blur-xl border-b border-[#2a292e]/80 shadow-[0_4px_24px_rgba(0,0,0,0.85)]">
-        <div className="h-20 max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4">
+        <div className="h-20 max-w-7xl mx-auto px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
           {/* Brand Logo & Title */}
           <div
-            className="flex items-center gap-3 cursor-pointer shrink-0 group"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer min-w-0 group"
             onClick={() => setActivePage('home')}
           >
             <GardensLogo size="md" className="w-11 h-11 group-hover:scale-105 transition-transform drop-shadow-[0_2px_12px_rgba(225,29,72,0.45)]" />
-            <div className="flex flex-col">
-              <span className="font-headline text-xl uppercase tracking-wider text-rose-500 leading-none group-hover:text-rose-400 transition-colors">
+            <div className="flex flex-col min-w-0">
+              <span className="font-headline text-base sm:text-xl uppercase tracking-wider text-rose-500 leading-none group-hover:text-rose-400 transition-colors truncate max-w-[38vw] sm:max-w-none">
                 {clubConfig.clubName}
               </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-[#ac8889] leading-none mt-1">
+              <span className="hidden sm:block font-mono text-[10px] uppercase tracking-widest text-[#ac8889] leading-none mt-1 truncate max-w-[38vw] sm:max-w-none">
                 {clubConfig.tagline}
               </span>
             </div>
@@ -117,10 +117,11 @@ export const Header: React.FC = () => {
           </nav>
 
           {/* Right Status & Actions */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* User Account / Sign In */}
             {!currentUser ? (
               <button
+                aria-label="Log in or sign up"
                 onClick={() => {
                   setAuthModalMode('login');
                   setIsAuthModalOpen(true);
@@ -128,16 +129,17 @@ export const Header: React.FC = () => {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1b1b1f] hover:bg-rose-600 text-rose-400 hover:text-white text-xs font-headline uppercase tracking-wider rounded-sm border border-rose-500/40 transition-all font-bold shadow-sm"
               >
                 <span className="material-symbols-outlined text-sm">login</span>
-                <span>Log In / Sign Up</span>
+                <span className="hidden sm:inline">Log In / Sign Up</span>
               </button>
             ) : (
               <>
                 <button
+                  aria-label="Sign out"
                   onClick={logout}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1b1b1f] hover:bg-rose-600 text-rose-400 hover:text-white text-xs font-headline uppercase tracking-wider rounded-sm border border-rose-500/40 transition-all font-bold shadow-sm"
                 >
                   <span className="material-symbols-outlined text-sm">logout</span>
-                  <span>Sign Out</span>
+                  <span className="hidden sm:inline">Sign Out</span>
                 </button>
                 <div className="hidden" aria-hidden="true">
               <div className="relative">
@@ -392,7 +394,7 @@ export const Header: React.FC = () => {
             {/* Mobile Menu Toggle */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 text-[#e4e1e7] hover:bg-[#2a292e] rounded-sm"
+              className="lg:hidden min-w-10 min-h-10 p-2 text-[#e4e1e7] hover:bg-[#2a292e] rounded-sm"
               aria-label="Toggle menu"
             >
               <span className="material-symbols-outlined">{mobileMenuOpen ? 'close' : 'menu'}</span>
@@ -402,7 +404,7 @@ export const Header: React.FC = () => {
 
         {/* Mobile Dropdown Navigation */}
         {mobileMenuOpen && (
-          <div className="lg:hidden bg-[#0e0e12] border-b border-[#2a292e] p-4 flex flex-col gap-2">
+          <div className="lg:hidden bg-[#0e0e12] border-b border-[#2a292e] p-3 sm:p-4 flex flex-col gap-2 max-h-[calc(100dvh-5rem)] overflow-y-auto">
             {navLinks.map((link) => (
               <button
                 key={link.id}

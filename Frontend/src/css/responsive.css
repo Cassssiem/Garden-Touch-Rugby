@@ -1,0 +1,44 @@
+/* Keep page sections from forcing a wider canvas on small screens. */
+main,
+main > *,
+main section,
+main article {
+  min-width: 0;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+/* Preserve readable data tables on phones while keeping them scrollable. */
+[class*="overflow-x-auto"] > table {
+  min-width: 640px;
+}
+
+[class*="overflow-x-auto"] {
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+  [class*="fixed inset-0"] {
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+
+  [class*="fixed inset-0"] > [class*="max-w-"] {
+    margin-top: auto;
+    margin-bottom: auto;
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+  }
+}

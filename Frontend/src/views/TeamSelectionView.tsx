@@ -779,7 +779,7 @@ export const TeamSelectionView: React.FC = () => {
       <section className="sticky bottom-0 z-30 w-full border-t border-white/10 bg-[#0e0e12]/95 backdrop-blur-xl py-4 px-4 sm:px-6 shadow-[0_-16px_40px_rgba(0,0,0,0.35)]">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           {/* WhatsApp Preview Capsule */}
-          <div className="flex items-center gap-3 bg-[#1b1b1f] px-4 py-2 rounded-sm w-full md:w-auto border border-[#2a292e] flex-1 max-w-3xl overflow-hidden">
+          <div className="hidden sm:flex items-center gap-3 bg-[#1b1b1f] px-4 py-2 rounded-sm w-full md:w-auto border border-[#2a292e] flex-1 max-w-3xl overflow-hidden">
             <span className="material-symbols-outlined text-rose-500 text-xl shrink-0">chat</span>
             <div className="flex flex-col min-w-0 flex-1">
               <span className="font-mono text-[10px] uppercase tracking-wider text-rose-500 font-bold">
@@ -792,10 +792,10 @@ export const TeamSelectionView: React.FC = () => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2 w-full md:w-auto justify-end shrink-0">
+          <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full md:w-auto justify-end shrink-0">
             <button
               onClick={copyWhatsAppText}
-              className="h-10 px-4 bg-[#1f1f23] hover:bg-[#2a292e] text-white font-headline text-xs uppercase tracking-wider rounded-sm flex items-center gap-1.5 transition-colors border border-[#353439] shadow-sm"
+              className="h-10 px-2 sm:px-4 bg-[#1f1f23] hover:bg-[#2a292e] text-white font-headline text-[10px] sm:text-xs uppercase tracking-wider rounded-sm flex items-center justify-center gap-1.5 transition-colors border border-[#353439] shadow-sm"
               type="button"
             >
               <span className="material-symbols-outlined text-base">content_copy</span>
@@ -803,7 +803,7 @@ export const TeamSelectionView: React.FC = () => {
             </button>
             <button
               onClick={exportTeamSheet}
-              className="h-10 px-4 bg-[#1f1f23] hover:bg-[#2a292e] text-white font-headline text-xs uppercase tracking-wider rounded-sm flex items-center gap-1.5 transition-colors border border-[#353439] shadow-sm"
+              className="h-10 px-2 sm:px-4 bg-[#1f1f23] hover:bg-[#2a292e] text-white font-headline text-[10px] sm:text-xs uppercase tracking-wider rounded-sm flex items-center justify-center gap-1.5 transition-colors border border-[#353439] shadow-sm"
               type="button"
             >
               <span className="material-symbols-outlined text-base">download</span>
@@ -812,7 +812,7 @@ export const TeamSelectionView: React.FC = () => {
             <button
               onClick={finalizeSelection}
               disabled={isFinalizing}
-              className="h-11 px-6 bg-rose-600 hover:bg-rose-500 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 text-white font-headline text-xs uppercase tracking-wider rounded-md flex items-center gap-1.5 transition-all shadow-[0_8px_24px_rgba(225,29,72,0.3)] font-bold"
+              className="col-span-2 sm:col-span-1 h-11 px-3 sm:px-6 bg-rose-600 hover:bg-rose-500 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 text-white font-headline text-[10px] sm:text-xs uppercase tracking-wider rounded-md flex items-center justify-center gap-1.5 transition-all shadow-[0_8px_24px_rgba(225,29,72,0.3)] font-bold"
               type="button"
             >
               <span className="material-symbols-outlined text-base">verified</span>

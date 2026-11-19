@@ -183,10 +183,10 @@ export const AvailabilityPoolView: React.FC = () => {
       <section className="w-full bg-[#1b1b1f] border-b border-[#2a292e] px-4 sm:px-6 py-3">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
           {/* Filter Chips */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-nowrap md:flex-wrap items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 md:mx-0 md:px-0 md:pb-0">
             <button
               onClick={() => setFilter('all')}
-              className={`px-3 py-1.5 font-headline text-xs uppercase tracking-wider rounded-sm transition-colors ${
+              className={`shrink-0 px-3 py-1.5 font-headline text-xs uppercase tracking-wider rounded-sm transition-colors ${
                 filter === 'all'
                   ? 'bg-rose-600 text-white shadow-[0_0_10px_rgba(225,29,72,0.35)]'
                   : 'bg-[#1f1f23] text-[#ac8889] hover:text-white'
@@ -196,7 +196,7 @@ export const AvailabilityPoolView: React.FC = () => {
             </button>
             <button
               onClick={() => setFilter('available')}
-              className={`px-3 py-1.5 font-headline text-xs uppercase tracking-wider rounded-sm transition-colors ${
+              className={`shrink-0 px-3 py-1.5 font-headline text-xs uppercase tracking-wider rounded-sm transition-colors ${
                 filter === 'available'
                   ? 'bg-rose-600 text-white shadow-[0_0_10px_rgba(225,29,72,0.35)]'
                   : 'bg-[#1f1f23] text-[#ac8889] hover:text-white'
@@ -206,7 +206,7 @@ export const AvailabilityPoolView: React.FC = () => {
             </button>
             <button
               onClick={() => setFilter('pending')}
-              className={`px-3 py-1.5 font-headline text-xs uppercase tracking-wider rounded-sm transition-colors ${
+              className={`shrink-0 px-3 py-1.5 font-headline text-xs uppercase tracking-wider rounded-sm transition-colors ${
                 filter === 'pending'
                   ? 'bg-rose-600 text-white shadow-[0_0_10px_rgba(225,29,72,0.35)]'
                   : 'bg-[#1f1f23] text-[#ac8889] hover:text-white'
@@ -216,7 +216,7 @@ export const AvailabilityPoolView: React.FC = () => {
             </button>
             <button
               onClick={() => setFilter('unavailable')}
-              className={`px-3 py-1.5 font-headline text-xs uppercase tracking-wider rounded-sm transition-colors ${
+              className={`shrink-0 px-3 py-1.5 font-headline text-xs uppercase tracking-wider rounded-sm transition-colors ${
                 filter === 'unavailable'
                   ? 'bg-rose-600 text-white shadow-[0_0_10px_rgba(225,29,72,0.35)]'
                   : 'bg-[#1f1f23] text-[#ac8889] hover:text-white'
@@ -227,14 +227,14 @@ export const AvailabilityPoolView: React.FC = () => {
           </div>
 
           {/* Search & Add Actions */}
-          <div className="flex items-center gap-2 flex-1 md:max-w-md justify-end">
-            <label className="flex flex-col gap-1 shrink-0 font-mono text-[9px] uppercase text-[#ac8889]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 md:max-w-md justify-end min-w-0">
+            <label className="flex flex-col gap-1 w-full sm:w-auto sm:shrink-0 font-mono text-[9px] uppercase text-[#ac8889]">
               Wednesday Pool
               <input
                 type="date"
                 value={availabilityDate}
                 onChange={(event) => setAvailabilityDate(event.target.value)}
-                className="bg-[#131317] text-white border border-[#353439] text-xs px-2 py-1.5 rounded-sm outline-none focus:border-rose-500"
+                className="w-full sm:w-auto bg-[#131317] text-white border border-[#353439] text-xs px-2 py-2 rounded-sm outline-none focus:border-rose-500"
               />
             </label>
             <div className="relative w-full">

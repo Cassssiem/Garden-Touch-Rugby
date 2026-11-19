@@ -436,8 +436,8 @@ export const PlayerCareerStatsView: React.FC = () => {
               </span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative min-w-[240px]">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 min-w-0">
+              <div className="relative w-full sm:w-60 sm:min-w-[240px]">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#ac8889] text-base">
                   search
                 </span>
@@ -450,7 +450,7 @@ export const PlayerCareerStatsView: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center bg-[#131317] p-0.5 rounded-sm border border-[#2a292e]">
+              <div className="flex items-center justify-between sm:justify-start overflow-x-auto bg-[#131317] p-0.5 rounded-sm border border-[#2a292e]">
                 <button
                   onClick={() => setRoleFilter('all')}
                   className={`px-3 py-1 text-xs font-mono uppercase rounded-sm font-bold ${
