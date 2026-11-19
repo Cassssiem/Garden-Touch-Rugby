@@ -228,13 +228,13 @@ export const AvailabilityPoolView: React.FC = () => {
 
           {/* Search & Add Actions */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 md:max-w-md justify-end min-w-0">
-            <label className="flex flex-col gap-1 w-full sm:w-auto sm:shrink-0 font-mono text-[9px] uppercase text-[#ac8889]">
-              Wednesday Pool
+            <label className="relative flex flex-col gap-1 w-full sm:w-auto sm:shrink-0 font-mono text-[9px] uppercase text-[#ac8889]">
+              <span className="sm:absolute sm:-top-3.5 sm:left-0">Wednesday Pool</span>
               <input
                 type="date"
                 value={availabilityDate}
                 onChange={(event) => setAvailabilityDate(event.target.value)}
-                className="w-full sm:w-auto bg-[#131317] text-white border border-[#353439] text-xs px-2 py-2 rounded-sm outline-none focus:border-rose-500"
+                className="h-9 w-full sm:w-auto bg-[#131317] text-white border border-[#353439] text-xs px-2 rounded-sm outline-none focus:border-rose-500"
               />
             </label>
             <div className="relative w-full">
@@ -246,18 +246,9 @@ export const AvailabilityPoolView: React.FC = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search player by nickname or surname..."
-                className="w-full bg-[#131317] text-white border border-[#353439] placeholder-[#ac8889]/60 text-xs pl-9 pr-3 py-2 rounded-sm outline-none focus:border-rose-500 transition-colors"
+                className="h-9 w-full bg-[#131317] text-white border border-[#353439] placeholder-[#ac8889]/60 text-xs pl-9 pr-3 rounded-sm outline-none focus:border-rose-500 transition-colors"
               />
             </div>
-            {isAdmin && (
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white font-headline text-xs uppercase tracking-wider rounded-sm transition-colors shadow-sm font-bold"
-              >
-                <span className="material-symbols-outlined text-[18px]">person_add</span>
-                <span className="hidden sm:inline">+ Add Player</span>
-              </button>
-            )}
           </div>
         </div>
       </section>
